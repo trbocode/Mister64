@@ -26,7 +26,6 @@ jobs:
         id: n64releaseinfo
         uses: cardinalby/git-get-release-action@v1
         with:
-          prerelease: true
           latest: true
           repo: RobertPeip/Mister64
       - name: Create external files csv 
@@ -49,7 +48,12 @@ jobs:
            rm ${RELEASE_FNAME}
            rm ${N64_DB_FNAME}
       - name: Create database
-        run: set -o pipefail && curl --fail --location https://raw.githubusercontent.com/theypsilon/Downloader_DB-Template_MiSTer/main/.github/build_db.py | python3 - -d
+        run: |
+          mkdir db_tmp
+          cp external_files.csv db_tmp
+          cd db_tmp
+          set -o pipefail && curl --fail --location https://raw.githubusercontent.com/theypsilon/Downloader_DB-Template_MiSTer/main/.github/build_db.py | python3 - -d
+          cp db.json ..
       - name: Push database
         run: |
           if [ ! -f db.json ]; then exit 0; fi
