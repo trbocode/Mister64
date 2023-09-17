@@ -88,7 +88,7 @@ architecture arch of savemem is
 
 begin 
 
-   DOSAVE <= '1' when (SAVETYPE = "001" or SAVETYPE = "010" or SAVETYPE = "011" or SAVETYPE = "100") else '0';
+   DOSAVE <= '1' when (SAVETYPE = "001" or SAVETYPE = "010" or SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101") else '0';
    
    MAXBLOCK <=   0 when (SAVETYPE = "001") else -- EEPROM4
                  3 when (SAVETYPE = "010") else -- EEPROM16

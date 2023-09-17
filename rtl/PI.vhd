@@ -96,6 +96,8 @@ architecture arch of PI is
       READROM,
       READSRAM,
       WRITESRAM,
+      WRITEFLASH,
+      WAITFLASH,
       COPYDMABLOCK,
       DMA_READCART,
       DMA_READRDRAM,
@@ -113,7 +115,27 @@ architecture arch of PI is
    signal sdram_pending          : std_logic := '0';   
    signal sdram_data             : std_logic_vector(31 downto 0) := (others => '0');   
    
-   signal rdram_pending          : std_logic := '0';   
+   signal rdram_pending          : std_logic := '0';  
+   signal dma_isflashread        : std_logic := '0';
+
+   -- Flash
+   type tFlashState is 
+   (  
+      FLASHIDLE, 
+      FLASHSTATUS,
+      FLASHERASE,
+      FLASHREAD,
+      FLASHWRITE
+   ); 
+   signal flashState       : tFlashState := FLASHIDLE;
+   signal flash_statusword : std_logic_vector(63 downto 0) := (others => '0');
+   signal flash_offset     : unsigned(9 downto 0) := (others => '0');
+
+   signal flash_addrA      : std_logic_vector(5 downto 0) := (others => '0');
+   signal flash_DataInA    : std_logic_vector(15 downto 0) := (others => '0');
+   signal flash_wrenA      : std_logic := '0';
+   signal flash_addrB      : std_logic_vector(4 downto 0) := (others => '0');
+   signal flash_DataOutB   : std_logic_vector(31 downto 0);
 
    -- savestates
    type t_ssarray is array(0 to 7) of std_logic_vector(63 downto 0);
@@ -126,19 +148,19 @@ begin
    
    rdram_burstcount <= 10x"01";
    sdram_burstcount <= x"01";
-   
-   change_flash <= '0';
-   
+
    process (clk1x)
       variable blocklength_new : integer range 0 to 128;
       variable count_new       : unsigned(24 downto 0);
       variable writemask_new   : std_logic_vector(1 downto 0);
-      variable sdram_dataMuxed : std_logic_vector(31 downto 0);
+      variable dma_readData    : std_logic_vector(15 downto 0);
    begin
       if rising_edge(clk1x) then
       
-         error_PI    <= '0';
-         change_sram <= '0';
+         error_PI     <= '0';
+         change_sram  <= '0';
+         change_flash <= '0';
+         flash_wrenA  <= '0';
       
          if (sdram_done = '1') then 
             sdram_pending <= '0'; 
@@ -174,6 +196,10 @@ begin
             
             sdram_pending           <= '0';
             rdram_pending           <= '0';
+            
+            flashState              <= FLASHIDLE;
+            flash_statusword        <= (others => '0');
+            flash_offset            <= (others => '0');
  
          elsif (ce = '1') then
          
@@ -261,6 +287,8 @@ begin
             case (state) is
             
                when IDLE =>
+               
+                  flash_addrB <= (others => '0');
                   
                   if (bus_cart_read_latched = '1') then
                      bus_cart_read_latched <= '0';
@@ -278,10 +306,13 @@ begin
                            else
                               sdram_address <= (9x"0" &  bus_cart_addr(16 downto 2) & "00") + to_unsigned(16#400000#, 27);
                            end if;
-                        else
-                           report "SRAM + FLASH read not implemented" severity warning;
-                           error_PI      <= '1';
-                           bus_cart_done <= '1';
+                        elsif (SAVETYPE = "101") then
+                           bus_cart_done     <= '1';
+                           if (bus_cart_addr(2) = '0') then
+                              bus_cart_dataRead <= flash_statusword(63 downto 32);
+                           else
+                              bus_cart_dataRead <= flash_statusword(31 downto 0);
+                           end if;
                         end if;
                      elsif (bus_cart_addr(28 downto 0) < 16#13FF0000# and cartAvailable = '1') then -- game rom
                         if (PI_STATUS_IObusy = '1') then
@@ -330,10 +361,41 @@ begin
                            else
                               sdram_address <= (9x"0" &  bus_cart_addr(16 downto 2) & "00") + to_unsigned(16#400000#, 27);
                            end if;
-                        else
-                           report "SRAM + FLASH read not implemented" severity warning;
-                           error_PI      <= '1';
+                        elsif (SAVETYPE = "101") then
                            bus_cart_done <= '1';
+                           if (bus_cart_addr(26 downto 0) /= 0) then
+                              case (bus_cart_dataWrite(31 downto 24)) is
+                                 when x"4B" => -- set erase offset
+                                    flash_offset <= unsigned(bus_cart_dataWrite(9 downto 0));
+                                 
+                                 when x"78" => -- erase
+                                    flashState        <= FLASHERASE;
+                                    flash_statusword  <= x"1111800800C2001D";
+                                 
+                                 when x"A5" => -- set write offset
+                                    flash_offset <= unsigned(bus_cart_dataWrite(9 downto 0));
+                                    flash_statusword  <= x"1111800400C2001D";
+                                 
+                                 when x"B4" => -- write
+                                    flashState        <= FLASHWRITE;
+                                 
+                                 when x"D2" => -- execute
+                                    if (flashState = FLASHERASE or flashState = FLASHWRITE) then
+                                       bus_cart_done     <= '0';
+                                       state             <= WRITEFLASH;
+                                    end if;
+                                 
+                                 when x"E1" => -- status
+                                    flashState        <= FLASHSTATUS;
+                                    flash_statusword  <= x"1111800100C2001D";
+                                 
+                                 when x"F0" => -- read
+                                    flashState        <= FLASHREAD;
+                                    flash_statusword  <= x"11118004F000001D";
+                                    
+                                 when others => null;
+                              end case;
+                           end if;
                         end if;
                      else
                         bus_cart_done <= '1';
@@ -398,6 +460,30 @@ begin
                      state             <= IDLE;
                      bus_cart_done     <= '1';
                   end if;
+                  
+               when WRITEFLASH =>
+                  state             <= WAITFLASH;
+                  change_flash      <= '1';
+                  flash_addrB       <= std_logic_vector(unsigned(flash_addrB) + 1);
+                  sdram_request     <= '1';
+                  sdram_rnw         <= '0';
+                  sdram_writeMask   <= "1111";
+                  sdram_address     <= (10x"0" & flash_offset & unsigned(flash_addrB) & "00") + to_unsigned(16#400000#, 27);
+                  if (flashState = FLASHWRITE) then
+                     sdram_dataWrite <= flash_DataOutB;
+                  else
+                     sdram_dataWrite <= (others => '1');
+                  end if;
+
+               when WAITFLASH =>
+                  if (sdram_done = '1') then
+                     if (flash_addrB = 5x"0") then
+                        state           <= IDLE;
+                        bus_cart_done   <= '1';
+                     else
+                        state           <= WRITEFLASH;
+                     end if;
+                  end if;
             
                when COPYDMABLOCK =>
                   first128 <= '0';
@@ -406,6 +492,8 @@ begin
                      sdram_request <= '1';
                      sdram_rnw     <= '1';
                      sdram_pending <= '1';
+                     
+                     dma_isflashread <= '0';
                      
                      if (PI_CART_ADDR(28 downto 0) < 16#08000000#) then -- DD
                         report "DD DMA read not implemented" severity failure;
@@ -416,6 +504,9 @@ begin
                         else
                            sdram_address <= (9x"0" &  PI_CART_ADDR(16 downto 1) & '0') + to_unsigned(16#400000#, 27);
                         end if;
+                        if (SAVETYPE = "101") then
+                           dma_isflashread <= '1';
+                        end if;  
                      elsif (PI_CART_ADDR(28 downto 0) < 16#13FF0000#) then -- game rom
                         sdram_address <= (PI_CART_ADDR(25 downto 1) & '0') + to_unsigned(16#800000#, 27);
                      else
@@ -440,7 +531,7 @@ begin
                      rdram_address   <= "0000" & PI_DRAM_ADDR(23 downto 3) & "000";
                      rdram_pending   <= '1';
                   
-                     if ((copycnt + 3) < maxram and PI_CART_ADDR(1) = '0' and PI_DRAM_ADDR(1) = '0') then
+                     if ((copycnt + 3) < maxram and PI_CART_ADDR(1) = '0' and PI_DRAM_ADDR(1) = '0' and dma_isflashread = '0') then
                      
                         copycnt      <= copycnt + 4;
                         PI_DRAM_ADDR <= PI_DRAM_ADDR + 4;
@@ -468,14 +559,30 @@ begin
                            writemask_new(1) := '1';
                         end if;
                         
+                        dma_readData := sdram_data(15 downto 0);
+                        
+                        if (dma_isflashread = '1') then
+                           if (flashState = FLASHSTATUS) then
+                              case (PI_CART_ADDR(2 downto 1)) is
+                                 when "00" => dma_readData := byteswap16(flash_statusword(63 downto 48));
+                                 when "01" => dma_readData := byteswap16(flash_statusword(47 downto 32));
+                                 when "10" => dma_readData := byteswap16(flash_statusword(31 downto 16));
+                                 when "11" => dma_readData := byteswap16(flash_statusword(15 downto 0));
+                                 when others => null;
+                              end case;
+                           elsif (flashState /= FLASHREAD) then
+                              dma_readData := (others => '0');
+                           end if;
+                        end if;
+                        
                         case (PI_DRAM_ADDR(2 downto 1)) is
-                           when "00" => rdram_dataWrite(15 downto  0) <= sdram_data(15 downto 0); rdram_writeMask <= "000000" & writemask_new;
-                           when "01" => rdram_dataWrite(31 downto 16) <= sdram_data(15 downto 0); rdram_writeMask <= "0000" & writemask_new & "00";
-                           when "10" => rdram_dataWrite(47 downto 32) <= sdram_data(15 downto 0); rdram_writeMask <= "00" & writemask_new & "0000";
-                           when "11" => rdram_dataWrite(63 downto 48) <= sdram_data(15 downto 0); rdram_writeMask <= writemask_new & "000000";
+                           when "00" => rdram_dataWrite(15 downto  0) <= dma_readData; rdram_writeMask <= "000000" & writemask_new;
+                           when "01" => rdram_dataWrite(31 downto 16) <= dma_readData; rdram_writeMask <= "0000" & writemask_new & "00";
+                           when "10" => rdram_dataWrite(47 downto 32) <= dma_readData; rdram_writeMask <= "00" & writemask_new & "0000";
+                           when "11" => rdram_dataWrite(63 downto 48) <= dma_readData; rdram_writeMask <= writemask_new & "000000";
                            when others => null;
                         end case;
-                        
+ 
                      end if;
                      
                   end if;
@@ -499,10 +606,10 @@ begin
                   
                      sdram_dataWrite <= rdram_dataRead(15 downto  0) & rdram_dataRead(15 downto  0);
                      case (PI_DRAM_ADDR(2 downto 1)) is
-                        when "00" => sdram_dataWrite <= rdram_dataRead(15 downto  0) & rdram_dataRead(15 downto  0);
-                        when "01" => sdram_dataWrite <= rdram_dataRead(31 downto 16) & rdram_dataRead(31 downto 16);
-                        when "10" => sdram_dataWrite <= rdram_dataRead(47 downto 32) & rdram_dataRead(47 downto 32);
-                        when "11" => sdram_dataWrite <= rdram_dataRead(63 downto 48) & rdram_dataRead(63 downto 48);
+                        when "00" => sdram_dataWrite <= rdram_dataRead(15 downto  0) & rdram_dataRead(15 downto  0); flash_DataInA <= rdram_dataRead(15 downto  0);
+                        when "01" => sdram_dataWrite <= rdram_dataRead(31 downto 16) & rdram_dataRead(31 downto 16); flash_DataInA <= rdram_dataRead(31 downto 16);
+                        when "10" => sdram_dataWrite <= rdram_dataRead(47 downto 32) & rdram_dataRead(47 downto 32); flash_DataInA <= rdram_dataRead(47 downto 32);
+                        when "11" => sdram_dataWrite <= rdram_dataRead(63 downto 48) & rdram_dataRead(63 downto 48); flash_DataInA <= rdram_dataRead(63 downto 48);
                         when others => null;
                      end case;
                      
@@ -518,6 +625,8 @@ begin
                         sdram_address <= (9x"0" &  PI_CART_ADDR(16 downto 2) & "00") + to_unsigned(16#400000#, 27);
                      end if;
                      
+                     flash_addrA <= std_logic_vector(PI_CART_ADDR(6 downto 1));
+                     
                      state   <= DMA_READRDRAM;
                      copycnt <= copycnt + 2;
                      PI_DRAM_ADDR <= PI_DRAM_ADDR + 2;
@@ -532,9 +641,8 @@ begin
                            state         <= DMA_WAITSDRAM;
                            sdram_request <= '1';
                            sdram_rnw     <= '0';
-                        else
-                           report "Flash DMA write not implemented" severity failure;
-                           error_PI      <= '1';
+                        elsif (SAVETYPE = "101") then
+                           flash_wrenA <= '1';
                         end if;
                      elsif (PI_CART_ADDR(28 downto 0) < 16#13FF0000#) then -- game rom
                         report "Cart DMA write not implemented" severity failure;
@@ -558,6 +666,29 @@ begin
          end if;
       end if;
    end process;
+   
+   iflashpage: entity work.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 6,
+      data_width_a  => 16,
+      addr_width_b  => 5,
+      data_width_b  => 32
+   )
+   port map
+   (
+      clock_a     => clk1x,
+      address_a   => flash_addrA,
+      data_a      => flash_DataInA,
+      wren_a      => flash_wrenA,
+      q_a         => open,
+      
+      clock_b     => clk1x,
+      address_b   => flash_addrB,
+      data_b      => 32x"0",
+      wren_b      => '0',
+      q_b         => flash_DataOutB
+   );
    
 --##############################################################
 --############################### savestates
