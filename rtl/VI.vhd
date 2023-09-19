@@ -19,6 +19,8 @@ entity VI is
       
       irq_out          : out std_logic := '0';
       
+      second_ena       : out std_logic := '0';
+      
       ISPAL            : in  std_logic;
       CROPBOTTOM       : in  unsigned(1 downto 0);
       
@@ -287,8 +289,10 @@ begin
                end if;
             end if;
             
+            second_ena <= '0';
             if (fps_SecondCounter = 62499999) then
                fps_SecondCounter <= 0;
+               second_ena        <= '1';
                fpscountBCD       <= fpscountBCD_next;
                fpscountBCD_next  <= (others => '0');       
             else

@@ -75,6 +75,11 @@ entity n64top is
       sdram_dataRead          : in  std_logic_vector(31 downto 0);
       
       -- PAD
+      PADCOUNT                : in  std_logic_vector(1 downto 0); -- count - 1, todo : implement
+      PADTYPE0                : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
+      PADTYPE1                : in  std_logic_vector(1 downto 0);
+      PADTYPE2                : in  std_logic_vector(1 downto 0);
+      PADTYPE3                : in  std_logic_vector(1 downto 0);
       pad_A                   : in  std_logic_vector(3 downto 0);
       pad_B                   : in  std_logic_vector(3 downto 0);
       pad_Z                   : in  std_logic_vector(3 downto 0);
@@ -105,6 +110,8 @@ entity n64top is
       -- save
       SAVETYPE                : in  std_logic_vector(2 downto 0); -- 0 -> None, 1 -> EEPROM4, 2 -> EEPROM16, 3 -> SRAM32, 4 -> SRAM96, 5 -> Flash
       EEPROMTYPE              : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
+      CONTROLLERPAK           : in  std_logic;
+      CPAKFORMAT              : in  std_logic;
       
       save                    : in  std_logic;
       load                    : in  std_logic;
@@ -113,7 +120,7 @@ entity n64top is
       save_ongoing            : out std_logic;
       save_rd                 : out std_logic;
       save_wr                 : out std_logic;
-      save_lba                : out std_logic_vector(7 downto 0);
+      save_lba                : out std_logic_vector(8 downto 0);
       save_ack                : in  std_logic;
       save_write              : in  std_logic;
       save_addr               : in  std_logic_vector(7 downto 0);
@@ -145,6 +152,8 @@ architecture arch of n64top is
    signal clk1xToggle            : std_logic := '0';
    signal clk1xToggle2X          : std_logic := '0';
    signal clk2xIndex             : std_logic := '0';
+   
+   signal second_ena             : std_logic;
    
    -- error codes
    signal errorEna               : std_logic;
@@ -386,6 +395,7 @@ architecture arch of n64top is
    
    signal change_sram            : std_logic;
    signal change_flash           : std_logic;
+   signal cpak_change            : std_logic;
    signal any_change             : std_logic;
    
    -- synthesis translate_off
@@ -695,6 +705,8 @@ begin
       
       irq_out              => irqVector(3),
       
+      second_ena           => second_ena,
+      
       ISPAL                => ISPAL,
       CROPBOTTOM           => CROPBOTTOM,
       
@@ -888,10 +900,18 @@ begin
       clk1x                => clk1x,        
       ce                   => ce_1x,           
       reset                => reset_intern_1x,   
+      
+      second_ena           => second_ena,
 
       ISPAL                => ISPAL,
       CICTYPE              => CICTYPE,
       EEPROMTYPE           => EEPROMTYPE,
+      PADCOUNT             => PADCOUNT,
+      PADTYPE0             => PADTYPE0,
+      PADTYPE1             => PADTYPE1,
+      PADTYPE2             => PADTYPE2,
+      PADTYPE3             => PADTYPE3,
+      CPAKFORMAT           => CPAKFORMAT,
       
       error                => error_pif,
       
@@ -945,6 +965,17 @@ begin
       eeprom_in            => eeprom_in,    
       eeprom_out           => eeprom_out,   
       eeprom_change        => eeprom_change,
+      
+      cpak_change          => cpak_change,
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead,
 
       SS_reset             => SS_reset,
       loading_savestate    => loading_savestate,
@@ -1293,7 +1324,7 @@ begin
       request_busy        => savestate_busy    
    );
    
-   any_change <= change_flash or change_sram or eeprom_change;
+   any_change <= change_flash or change_sram or eeprom_change or cpak_change;
    
    isavemem : entity work.savemem
    port map
@@ -1302,6 +1333,7 @@ begin
       reset                => reset,
       
       SAVETYPE             => SAVETYPE,
+      CONTROLLERPAK        => CONTROLLERPAK,
       
       save                 => save,          
       load                 => load,          

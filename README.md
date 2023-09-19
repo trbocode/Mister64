@@ -1,6 +1,7 @@
 
 ## Hardware Requirements
 SDRAM of any size is required.
+32Mbyte SDRAM can only be used for games up to 24Mbyte in size.
 
 ## Bios
 Rename your PIF ROM file (e.g. `pif.ntsc.rom` ) and place it in the `./games/N64/` folder as `boot.rom`

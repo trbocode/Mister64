@@ -158,6 +158,11 @@ begin
       sdram_dataRead        => sdram_dataRead, 
       
       -- pad
+      PADCOUNT              => "11",
+      PADTYPE0              => "01",
+      PADTYPE1              => "00",
+      PADTYPE2              => "00",
+      PADTYPE3              => "00",
       pad_A                 => "0000",
       pad_B                 => "0000",
       pad_Z                 => "0000",
@@ -184,6 +189,8 @@ begin
       -- saves              
       SAVETYPE              => "011",
       EEPROMTYPE            => "01",
+      CONTROLLERPAK         => '1',
+      CPAKFORMAT            => '0',
       
       save                  => '0', 
       load                  => '0', 

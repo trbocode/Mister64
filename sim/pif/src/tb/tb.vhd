@@ -6,33 +6,52 @@ library STD;
 use STD.textio.all;
 
 library n64;
+use n64.pSDRAM.all;
 
 entity etb  is
 end entity;
 
 architecture arch of etb is
 
-   signal clk1x            : std_logic := '1';
-   signal reset            : std_logic := '1';
-      
-   signal SIPIF_ramreq     : std_logic := '0';
-   signal SIPIF_addr       : unsigned(5 downto 0) := (others => '0');
-   signal SIPIF_writeEna   : std_logic := '0'; 
-   signal SIPIF_writeData  : std_logic_vector(7 downto 0);
-   signal SIPIF_ramgrant   : std_logic;
-
-   signal SIPIF_writeProc  : std_logic := '0';
-   signal SIPIF_readProc   : std_logic := '0';
-   signal SIPIF_ProcDone   : std_logic := '0';
+   signal clk1x               : std_logic := '1';
+   signal reset               : std_logic := '1';
+         
+   signal SIPIF_ramreq        : std_logic := '0';
+   signal SIPIF_addr          : unsigned(5 downto 0) := (others => '0');
+   signal SIPIF_writeEna      : std_logic := '0'; 
+   signal SIPIF_writeData     : std_logic_vector(7 downto 0);
+   signal SIPIF_ramgrant      : std_logic;
+   
+   signal SIPIF_writeProc     : std_logic := '0';
+   signal SIPIF_readProc      : std_logic := '0';
+   signal SIPIF_ProcDone      : std_logic := '0';
+   
+   signal sdramMux_request    : tSDRAMSingle;
+   signal sdramMux_rnw        : tSDRAMSingle;    
+   signal sdramMux_address    : tSDRAMReqAddr;
+   signal sdramMux_burstcount : tSDRAMBurstcount;  
+   signal sdramMux_writeMask  : tSDRAMBwriteMask;  
+   signal sdramMux_dataWrite  : tSDRAMBwriteData;
+   signal sdramMux_granted    : tSDRAMSingle;
+   signal sdramMux_done       : tSDRAMSingle;
+   signal sdramMux_dataRead   : std_logic_vector(31 downto 0);
+   
+   signal sdram_dataWrite     : std_logic_vector(31 downto 0);
+   signal sdram_dataRead      : std_logic_vector(31 downto 0);
+   signal sdram_Adr           : std_logic_vector(26 downto 0);
+   signal sdram_be            : std_logic_vector(3 downto 0);
+   signal sdram_rnw           : std_logic;
+   signal sdram_ena           : std_logic;
+   signal sdram_done          : std_logic;    
    
    -- testbench
-   signal cmdCount         : integer := 0;
+   signal cmdCount            : integer := 0;
 
 
 begin
 
    clk1x <= not clk1x after 8 ns;
-   reset <= '0' after 600 ns;
+   reset <= '0' after 3 ms;
  
    iPIF: entity N64.pif
    port map
@@ -41,10 +60,19 @@ begin
       ce                   => '1',
       reset                => reset,
       
-      EEPROMTYPE           => "10",
+      second_ena           => '1',
+      
+      ISPAL                => '0',
+      EEPROMTYPE           => "01",
       CICTYPE              => "0000",
+      PADCOUNT             => "11",
+      PADTYPE0             => "01",
+      PADTYPE1             => "00",
+      PADTYPE2             => "00",
+      PADTYPE3             => "00",
+      CPAKFORMAT           => '0',
                            
-      pifrom_wraddress     => 9x"0",
+      pifrom_wraddress     => 10x"0",
       pifrom_wrdata        => 32x"0",
       pifrom_wren          => '0',
                            
@@ -89,6 +117,19 @@ begin
       pad_3_analog_h       => x"00",
       pad_3_analog_v       => x"00",
       
+      eeprom_addr          => 9x"0",
+      eeprom_wren          => '0',
+      eeprom_in            => 32x"0",
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead,
+      
       SS_reset             => '0',
       loading_savestate    => '0',
       SS_DataWrite         => 64x"0",
@@ -97,6 +138,64 @@ begin
       SS_rden              => '0',
       SS_DataRead          => open,
       SS_idle              => open
+   );
+   
+   iSDRamMux : entity n64.SDRamMux
+   port map
+   (
+      clk1x                => clk1x,
+                           
+      error                => open,
+                           
+      sdram_ena            => sdram_ena,      
+      sdram_rnw            => sdram_rnw,      
+      sdram_Adr            => sdram_Adr,      
+      sdram_be             => sdram_be,       
+      sdram_dataWrite      => sdram_dataWrite,
+      sdram_done           => sdram_done,     
+      sdram_dataRead       => sdram_dataRead, 
+                           
+      sdramMux_request     => sdramMux_request,   
+      sdramMux_rnw         => sdramMux_rnw,       
+      sdramMux_address     => sdramMux_address,   
+      sdramMux_burstcount  => sdramMux_burstcount,
+      sdramMux_writeMask   => sdramMux_writeMask, 
+      sdramMux_dataWrite   => sdramMux_dataWrite, 
+      sdramMux_granted     => sdramMux_granted,   
+      sdramMux_done        => sdramMux_done,      
+      sdramMux_dataRead    => sdramMux_dataRead,
+      
+      rdp9fifo_reset       => '0',   
+      rdp9fifo_Din         => 50x"0",     
+      rdp9fifo_Wr          => '0',      
+      
+      rdp9fifoZ_reset      => '0',   
+      rdp9fifoZ_Din        => 50x"0",     
+      rdp9fifoZ_Wr         => '0'    
+   );
+   
+   sdramMux_request(0) <= '0';
+   sdramMux_request(2 to 3) <= "00";
+   
+   isdram_model : entity work.sdram_model
+   generic map
+   (
+      DOREFRESH         => '0',
+      INITFILE          => "NONE",
+      SCRIPTLOADING     => '1',
+      FILELOADING       => '0'
+   )
+   port map
+   (
+      clk               => clk1x,
+      addr              => sdram_Adr,
+      req               => sdram_ena,
+      rnw               => sdram_rnw,
+      be                => sdram_be,
+      di                => sdram_dataWrite,
+      do                => sdram_dataRead,
+      done              => sdram_done,
+      fileSize          => open
    );
    
    process

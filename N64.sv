@@ -242,6 +242,11 @@ parameter CONF_STR = {
 	//"RH,Save state (Alt-F1);",
 	//"RI,Restore state (F1);",
 	"-;",
+   "O[51:50],Pad 1 Pak,None,CPAK,Rumble;",
+   "O[53:52],Pad 2 Pak,None,CPAK,Rumble;",
+   "O[55:54],Pad 3 Pak,None,CPAK,Rumble;",
+   "O[57:56],Pad 4 Pak,None,CPAK,Rumble;",
+	"-;",
    "O[30],Texture Filter,On,Off;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
@@ -257,6 +262,7 @@ parameter CONF_STR = {
    "P2O[80:79],System Type,NTSC,PAL;",
 	"P2O[68:65],CIC,6101,6102,7101,7102,6103,7103,6105,7105,6106,7106,8303,8401,5167,DDUS;",
    "P2O[71],ControllerPak,Off,On;",
+   "P2R[81],Format CPAK now;",
    "P2O[72],RumblePak,Off,On;",
    "P2O[73],TransferPak,Off,On;",
    "P2O[74],RTC,Off,On;",
@@ -328,7 +334,7 @@ reg         ioctl_wait = 0;
 reg [7:0] info_index;
 reg info_req;
 
-wire  [7:0] sd_lba;
+wire  [8:0] sd_lba;
 wire        sd_rd;
 wire        sd_wr;
 wire        sd_ack;
@@ -625,6 +631,11 @@ n64top
    .sdram_dataRead   (sdram_dataRead ),
       
    // pad
+   .PADCOUNT         (3'd3),
+   .PADTYPE0         (status[51:50]),
+   .PADTYPE1         (status[53:52]),
+   .PADTYPE2         (status[55:54]),
+   .PADTYPE3         (status[57:56]),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),
    .pad_Z            ({joy4[ 9],joy3[ 9],joy2[ 9],joy[ 9]}),
@@ -655,6 +666,8 @@ n64top
    // Saves
    .SAVETYPE         (status[77:75]),
    .EEPROMTYPE       (eepromtype),
+   .CONTROLLERPAK    (status[71]),
+   .CPAKFORMAT       (status[81]),
    
    .save             (bk_save),
    .load             (bk_load),

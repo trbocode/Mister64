@@ -11,6 +11,7 @@ entity savemem is
       reset                : in  std_logic;
       
       SAVETYPE             : in  std_logic_vector(2 downto 0); -- 0 -> None, 1 -> EEPROM4, 2 -> EEPROM16, 3 -> SRAM32, 4 -> SRAM96, 5 -> Flash
+      CONTROLLERPAK        : in  std_logic;
       
       save                 : in  std_logic;
       load                 : in  std_logic;
@@ -37,7 +38,7 @@ entity savemem is
 
       save_rd              : out std_logic := '0';
       save_wr              : out std_logic := '0';
-      save_lba             : out std_logic_vector(7 downto 0);
+      save_lba             : out std_logic_vector(8 downto 0);
       save_ack             : in  std_logic;
       save_write           : in  std_logic;
       save_addr            : in  std_logic_vector(7 downto 0);
@@ -48,8 +49,8 @@ end entity;
 
 architecture arch of savemem is
    
-   signal DOSAVE   : std_logic;
-   signal MAXBLOCK : integer range 0 to 255; 
+   signal DOSAVE     : std_logic;
+   signal MAXBLOCK   : integer range 0 to 255; 
    
    type tState is
    (
@@ -78,7 +79,9 @@ architecture arch of savemem is
   
    signal anyChangeBuf  : std_logic := '0';
      
-   signal blockCnt      : unsigned(7 downto 0);   
+   signal blockCnt      : unsigned(8 downto 0);   
+  
+   signal is_CPAK       : std_logic := '0';
   
    -- memory
    signal mem_addrA     : std_logic_vector(6 downto 0) := (others => '0');
@@ -88,7 +91,7 @@ architecture arch of savemem is
 
 begin 
 
-   DOSAVE <= '1' when (SAVETYPE = "001" or SAVETYPE = "010" or SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101") else '0';
+   DOSAVE <= '1' when (SAVETYPE = "001" or SAVETYPE = "010" or SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101" or CONTROLLERPAK = '1') else '0';
    
    MAXBLOCK <=   0 when (SAVETYPE = "001") else -- EEPROM4
                  3 when (SAVETYPE = "010") else -- EEPROM16
@@ -134,6 +137,11 @@ begin
                when IDLE => 
                   blockCnt  <= (others => '0');
                   mem_addrA <= (others => '0');
+                  save_lba  <= (others => '0');
+                  is_CPAK   <= '0';
+                  if (SAVETYPE = "000") then
+                     is_CPAK <= '1';
+                  end if;
                   if (loadLatched = '1' and mounted = '1') then
                      state        <= LOAD_REQREAD;
                      anyChangeBuf <= '0';
@@ -149,12 +157,12 @@ begin
                -- loading
                when LOAD_REQREAD =>
                   state <= LOAD_WAITACKSTART;
-                  save_lba <= std_logic_vector(blockCnt);
                   save_rd  <= '1';
                   
                when LOAD_WAITACKSTART =>
                   if (save_ack = '1') then
-                     state <= LOAD_WAITACKDONE;
+                     state    <= LOAD_WAITACKDONE;
+                     save_lba <= std_logic_vector(unsigned(save_lba) + 1);
                   end if;
                   
                when LOAD_WAITACKDONE =>
@@ -168,7 +176,12 @@ begin
             
                when LOAD_REQWRITE =>
                   state        <= LOAD_WAITACK;
-                  if (SAVETYPE = "001" or SAVETYPE = "010") then
+                  if (is_CPAK = '1') then
+                     sdram_request   <= '1';
+                     sdram_rnw       <= '0';
+                     sdram_address   <= resize(blockCnt(7 downto 0) & unsigned(mem_addrA & "00"), 27) + to_unsigned(16#500000#, 27);
+                     sdram_dataWrite <= byteswap32(mem_DataOutA);
+                  elsif (SAVETYPE = "001" or SAVETYPE = "010") then
                      eeprom_addr <= std_logic_vector(blockCnt(1 downto 0)) & mem_addrA;
                      eeprom_in   <= mem_DataOutA;
                      eeprom_wren <= '1';
@@ -180,11 +193,18 @@ begin
                   end if;
                   
                when LOAD_WAITACK =>
-                  if ((SAVETYPE = "001" or SAVETYPE = "010") or (sdram_done = '1' and (SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101"))) then
+                  if ((is_CPAK = '0' and (SAVETYPE = "001" or SAVETYPE = "010")) or (sdram_done = '1' and (SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101" or is_CPAK = '1'))) then
                      if (unsigned(mem_addrA) = 127) then
-                        if (blockCnt = MAXBLOCK) then
-                           state        <= IDLE;
-                           loadLatched  <= '0';
+                        if ((is_CPAK = '1' and blockCnt = 255) or (is_CPAK = '0' and blockCnt = MAXBLOCK)) then
+                           if (is_CPAK = '1' or CONTROLLERPAK = '0') then
+                              state        <= IDLE;
+                              loadLatched  <= '0';
+                           else
+                              blockCnt  <= (others => '0');
+                              mem_addrA <= (others => '0');
+                              is_CPAK   <= '1';
+                              state     <= LOAD_REQREAD;
+                           end if;
                         else
                            blockCnt <= blockCnt + 1;
                            state    <= LOAD_REQREAD;
@@ -197,7 +217,12 @@ begin
                   
                -- saving
                when SAVE_REQDATA =>
-                  if (SAVETYPE = "001" or SAVETYPE = "010") then
+                  if (is_CPAK = '1') then
+                     sdram_request   <= '1';
+                     sdram_rnw       <= '1';
+                     sdram_address   <= resize(blockCnt(7 downto 0) & unsigned(mem_addrA & "00"), 27) + to_unsigned(16#500000#, 27);
+                     state           <= SAVE_WAITSDRAM;
+                  elsif (SAVETYPE = "001" or SAVETYPE = "010") then
                      eeprom_addr <= std_logic_vector(blockCnt(1 downto 0)) & mem_addrA;
                      state       <= SAVE_WAITEEPROM;
                   elsif (SAVETYPE = "011" or SAVETYPE = "100" or SAVETYPE = "101") then
@@ -232,20 +257,27 @@ begin
                   
                when SAVE_REQWRITE =>
                   state <= SAVE_WAITACKSTART;
-                  save_lba <= std_logic_vector(blockCnt);
                   save_wr  <= '1';
                  
                when SAVE_WAITACKSTART =>
                   if (save_ack = '1') then 
-                     state <= SAVE_WAITACKDONE;
+                     state    <= SAVE_WAITACKDONE;
+                     save_lba <= std_logic_vector(unsigned(save_lba) + 1);
                   end if;
                   
                when SAVE_WAITACKDONE =>
                   mem_addrA <= (others => '0');
                   if (save_ack = '0') then 
-                     if (blockCnt = MAXBLOCK) then
-                        state          <= IDLE;
-                        save_ongoing   <= '0';
+                     if ((is_CPAK = '1' and blockCnt = 255) or (is_CPAK = '0' and blockCnt = MAXBLOCK)) then
+                        if (is_CPAK = '1' or CONTROLLERPAK = '0') then
+                           state          <= IDLE;
+                           save_ongoing   <= '0';
+                        else
+                           blockCnt  <= (others => '0');
+                           mem_addrA <= (others => '0');
+                           is_CPAK   <= '1';
+                           state     <= SAVE_REQDATA;
+                        end if;
                      else
                         blockCnt <= blockCnt + 1;
                         state    <= SAVE_REQDATA;

@@ -12,9 +12,17 @@ entity pif is
       ce                   : in  std_logic;
       reset                : in  std_logic;
       
+      second_ena           : in  std_logic;
+      
       ISPAL                : in  std_logic;
       CICTYPE              : in  std_logic_vector(3 downto 0);
       EEPROMTYPE           : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
+      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1, todo : implement
+      PADTYPE0             : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
+      PADTYPE1             : in  std_logic_vector(1 downto 0);
+      PADTYPE2             : in  std_logic_vector(1 downto 0);
+      PADTYPE3             : in  std_logic_vector(1 downto 0);
+      CPAKFORMAT           : in  std_logic;
       
       error                : out std_logic := '0';
       
@@ -69,6 +77,17 @@ entity pif is
       eeprom_out           : out std_logic_vector(31 downto 0);
       eeprom_change        : out std_logic := '0';
       
+      cpak_change          : out std_logic := '0';
+      
+      sdram_request        : out std_logic := '0';
+      sdram_rnw            : out std_logic := '0'; 
+      sdram_address        : out unsigned(26 downto 0):= (others => '0');
+      sdram_burstcount     : out unsigned(7 downto 0):= (others => '0');
+      sdram_writeMask      : out std_logic_vector(3 downto 0) := (others => '0'); 
+      sdram_dataWrite      : out std_logic_vector(31 downto 0) := (others => '0');
+      sdram_done           : in  std_logic;
+      sdram_dataRead       : in  std_logic_vector(31 downto 0);
+      
       SS_reset             : in  std_logic;
       loading_savestate    : in  std_logic;
       SS_DataWrite         : in  std_logic_vector(63 downto 0);
@@ -97,6 +116,8 @@ architecture arch of pif is
    constant CIC_TYPE_5167 : std_logic_vector(3 downto 0) := "1100";
    constant CIC_TYPE_DDUS : std_logic_vector(3 downto 0) := "1101";
    
+   signal INITDONE         : std_logic := '0';
+   
    signal cic_seed         : std_logic_vector(7 downto 0);
    signal cic_version      : std_logic;
    signal cic_type         : std_logic;
@@ -116,6 +137,7 @@ architecture arch of pif is
       WRITESTARTUP1,
       WRITESTARTUP2,
       WRITESTARTUP3,
+
       WRITECOMMAND,
       READCOMMAND,
       EVALWRITE,
@@ -141,6 +163,20 @@ architecture arch of pif is
       
       EXTCOMM_RESPONSETYPE,
       EXTCOMM_RESPONSEPAD,
+      
+      EXTCOMM_PAK_READADDR1,
+      EXTCOMM_PAK_READADDR2,
+      EXTCOMM_PAK_READADDR3,
+      
+      EXTCOMM_PAKCRC,
+      
+      EXTCOMM_PAKREAD_READSDRAM,
+      EXTCOMM_PAKREAD_WRITEPIF,
+      EXTCOMM_PAKREAD_CHECKNEXT,
+      
+      EXTCOMM_PAKWRITE_READPIF,
+      EXTCOMM_PAKWRITE_WRITESDRAM,
+      EXTCOMM_PAKWRITE_CHECKNEXT,
       
       EXTCOMM_EEPROMINFO,
       
@@ -174,10 +210,13 @@ architecture arch of pif is
    signal EXT_receive               : unsigned(5 downto 0) := (others => '0');
    signal EXT_valid                 : std_logic := '0';
    signal EXT_over                  : std_logic := '0';
-   signal EXP_responseindex         : unsigned(5 downto 0);
+   signal EXT_skip                  : std_logic := '0';
+   signal EXP_responseindex         : unsigned(2 downto 0);
    
-   type t_responsedata is array(0 to 7) of std_logic_vector(7 downto 0);
+   type t_responsedata is array(0 to 3) of std_logic_vector(7 downto 0);
    signal EXT_responsedata : t_responsedata;      
+   
+   signal PADTYPE                   : std_logic_vector(1 downto 0);
    
    -- PIFRAM
    signal pifram_wren               : std_logic := '0';
@@ -187,6 +226,25 @@ architecture arch of pif is
    signal ram_data_b                : std_logic_vector(7 downto 0) := (others => '0');
    signal ram_wren_b                : std_logic := '0';   
    signal ram_q_b                   : std_logic_vector(7 downto 0); 
+   
+   -- PAKs
+   signal pakwrite                  : std_logic;
+   signal pakaddr                   : std_logic_vector(15 downto 0) := (others => '0');
+   signal pakvalue                  : std_logic_vector(7 downto 0);
+   
+   signal pakcrc_count              : unsigned(2 downto 0);
+   signal pakcrc_value              : std_logic_vector(7 downto 0);
+   signal pakcrc_last               : std_logic;
+   
+   type tCPAKINITState is
+   (
+      PAKINIT_IDLE,
+      PAKINIT_WRITESDRAM,
+      PAKINIT_WAITSDRAM
+   );
+   signal PAKINITState              : tCPAKINITState := PAKINIT_IDLE;
+   signal pakinit_addr              : unsigned(14 downto 0) := (others => '0');
+   signal pakinit_data              : std_logic_vector(31 downto 0);
    
    -- EEPROM
    signal eeprom_addr_a             : std_logic_vector(8 downto 0);
@@ -203,8 +261,7 @@ architecture arch of pif is
       EEPROM_IDLE,
       EEPROM_CLEAR
    );
-   signal EEPROMState               : tEEPROMState := EEPROM_CLEAR;
-   
+   signal EEPROMState               : tEEPROMState := EEPROM_IDLE;
    signal eeprom_addr_clear         : std_logic_vector(8 downto 0) := (others => '0');
    
 begin 
@@ -221,6 +278,14 @@ begin
       wraddress => pifrom_wraddress,
       wrdata    => pifrom_wrdata,   
       wren      => pifrom_wren     
+   );
+   
+   ipif_cpakinit : entity work.pif_cpakinit
+   port map
+   (
+      clk       => clk1x,
+      address   => std_logic_vector(pakinit_addr(6 downto 0)),
+      data      => pakinit_data
    );
    
    iPIFRAM: entity work.dpram_dif
@@ -275,7 +340,14 @@ begin
          when others => null;
       end case;
    end process;
-
+   
+   PADTYPE <= PADTYPE0 when (EXT_channel(1 downto 0) = "00") else 
+              PADTYPE1 when (EXT_channel(1 downto 0) = "01") else 
+              PADTYPE2 when (EXT_channel(1 downto 0) = "10") else 
+              PADTYPE3;
+              
+   sdram_burstcount <= x"01";
+              
    process (clk1x)
    begin
       if rising_edge(clk1x) then
@@ -283,6 +355,59 @@ begin
          error         <= '0';
          pifram_wren   <= '0';
          eeprom_wren_b <= '0';
+         sdram_request <= '0';
+         cpak_change   <= '0';
+         
+         if (second_ena = '1' and INITDONE = '0') then
+            INITDONE     <= '1';
+            PAKINITState <= PAKINIT_WRITESDRAM;
+            EEPROMState  <= EEPROM_CLEAR;
+         end if;
+         if (CPAKFORMAT = '1') then
+            PAKINITState <= PAKINIT_WRITESDRAM;
+            pakinit_addr <= (others => '0');
+         end if;
+         
+         -- init eeprom
+         case (EEPROMState) is
+         
+            when EEPROM_IDLE => null;
+               
+            when EEPROM_CLEAR =>
+               eeprom_addr_clear <= std_logic_vector(unsigned(eeprom_addr_clear) + 1);
+               if (eeprom_addr_clear = 9x"1FF") then
+                   EEPROMState <= EEPROM_IDLE;
+               end if;
+         
+         end case;
+         
+         -- init PAK area
+         case (PAKINITState) is      
+               
+            when PAKINIT_IDLE => null;
+            
+            when PAKINIT_WRITESDRAM =>
+               PAKINITState    <= PAKINIT_WAITSDRAM;
+               sdram_request   <= '1';
+               sdram_rnw       <= '0';
+               sdram_writeMask <= "1111";
+               sdram_address   <= resize(unsigned(pakinit_addr & "00"), 27) + to_unsigned(16#500000#, 27);
+               if (pakinit_addr(12 downto 0) < 128) then
+                  sdram_dataWrite <= pakinit_data;
+               else
+                  sdram_dataWrite <= (others => '0');
+               end if;
+               pakinit_addr    <= pakinit_addr + 1;
+               if (pakinit_addr = 15x"7FFF") then
+                  PAKINITState <= PAKINIT_IDLE;
+               end if;
+
+            when PAKINIT_WAITSDRAM =>
+               if (sdram_done = '1') then
+                  PAKINITState <= PAKINIT_WRITESDRAM;
+               end if;
+               
+         end case;
       
          if (reset = '1') then
             
@@ -562,6 +687,7 @@ begin
                when EXTCOMM_RECEIVETYPE =>
                   EXT_over      <= '0';
                   EXT_valid     <= '0';
+                  EXT_skip      <= '0';
                   if (EXT_channel < 4) then
                      state <= EXTCOMM_EVALTYPEGAMEPAD;
                   else
@@ -569,11 +695,33 @@ begin
                   end if;
                   
                when EXTCOMM_EVALTYPEGAMEPAD =>
+                  pakcrc_value <= (others => '0');
                   if (ram_q_b = x"00" or ram_q_b = x"FF") then -- type check
                      state         <= EXTCOMM_RESPONSETYPE;
                   elsif (ram_q_b = x"01") then -- pad response
                      state <= EXTCOMM_RESPONSEPAD;
-                  else -- rumble and controller pak
+                  elsif (ram_q_b = x"02") then -- pad read
+                     pakwrite      <= '0';
+                     state         <= EXTCOMM_PAK_READADDR1;
+                     EXT_index     <= EXT_index + 1;
+                     ram_address_b <= std_logic_vector(EXT_index + 1);
+                     if (EXT_send /= x"03" or EXT_receive /= x"21") then
+                        error <= '1';
+                     else
+                        EXT_valid <= '1';
+                        EXT_skip  <= '1';
+                     end if;
+                  elsif (ram_q_b = x"03") then -- pad write
+                     pakwrite      <= '1';
+                     state         <= EXTCOMM_PAK_READADDR1;
+                     EXT_index     <= EXT_index + 1;
+                     ram_address_b <= std_logic_vector(EXT_index + 1);
+                     if (EXT_send /= x"23" or EXT_receive /= x"01") then
+                        error <= '1';
+                     else
+                        EXT_valid <= '1';
+                     end if;
+                  else
                      state         <= EXTCOMM_RESPONSE_VALIDOVER;
                   end if;
                
@@ -598,7 +746,11 @@ begin
                   EXT_valid           <= '1';
                   EXT_responsedata(0) <= x"05";
                   EXT_responsedata(1) <= x"00";
-                  EXT_responsedata(2) <= x"02";
+                  if (PADTYPE = "01" or PADTYPE = "10") then
+                     EXT_responsedata(2) <= x"01";
+                  else
+                     EXT_responsedata(2) <= x"02";
+                  end if;
                
                when EXTCOMM_RESPONSEPAD =>
                   state               <= EXTCOMM_RESPONSE_VALIDOVER;
@@ -629,6 +781,139 @@ begin
                      when "10"   => EXT_responsedata(2) <= pad_2_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_2_analog_v));
                      when others => EXT_responsedata(2) <= pad_3_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_3_analog_v));
                   end case;
+                  
+               -- reponses for PAK
+               when EXTCOMM_PAK_READADDR1 =>
+                  state <= EXTCOMM_PAK_READADDR2;
+                  EXT_send      <= EXT_send - 1;
+                  EXT_index     <= EXT_index + 1;
+                  ram_address_b <= std_logic_vector(EXT_index + 1);
+                  
+               when EXTCOMM_PAK_READADDR2 =>
+                  state                <= EXTCOMM_PAK_READADDR3;
+                  pakaddr(15 downto 8) <= ram_q_b;
+                  EXT_send             <= EXT_send - 1;
+                  if (pakwrite = '1') then
+                     EXT_index         <= EXT_index + 1;
+                     ram_address_b     <= std_logic_vector(EXT_index + 1);
+                  end if;
+
+               when EXTCOMM_PAK_READADDR3 =>
+                  if (pakwrite = '0') then
+                     state <= EXTCOMM_PAKREAD_READSDRAM;
+                  else
+                     state <= EXTCOMM_PAKWRITE_READPIF;
+                  end if;
+                  pakaddr(7 downto 5)  <= ram_q_b(7 downto 5);
+                  EXT_send             <= EXT_send - 1;
+                  
+               -- PAK CRC
+               when EXTCOMM_PAKCRC =>
+                  pakcrc_count <= pakcrc_count + 1;
+                  if (pakcrc_count = 7) then
+                     pakcrc_last <= '0'; 
+                     if (pakcrc_last = '0') then
+                        if (pakwrite = '1') then
+                           state <= EXTCOMM_PAKWRITE_CHECKNEXT;
+                        else
+                           state <= EXTCOMM_PAKREAD_CHECKNEXT;
+                        end if;
+                     end if;
+                  end if;
+                  
+                  if (pakcrc_value(7) = '1') then
+                     pakcrc_value <= (pakcrc_value(6 downto 0) & pakvalue(7)) xor x"85";
+                  else
+                     pakcrc_value <= (pakcrc_value(6 downto 0) & pakvalue(7));
+                  end if;
+                  pakvalue <= pakvalue(6 downto 0) & '0';
+                  
+               -- reponses for PAK read
+               when EXTCOMM_PAKREAD_READSDRAM => 
+                  state           <= EXTCOMM_PAKREAD_WRITEPIF;
+                  sdram_request   <= '1';
+                  sdram_rnw       <= '1';
+                  sdram_address   <= resize(EXT_channel & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
+                  
+               when EXTCOMM_PAKREAD_WRITEPIF =>
+                  if (sdram_done = '1') then
+                     state          <= EXTCOMM_PAKCRC;
+                     pakcrc_count   <= (others => '0');
+                     pakcrc_last    <= '0';
+                     if (pakaddr(4 downto 0) = 5x"1F") then -- last byte will need one additional round of crc with input value 00
+                        pakcrc_last <= '1';
+                     end if;
+                     ram_wren_b     <= '1';
+                     EXT_index      <= EXT_index + 1;
+                     ram_address_b  <= std_logic_vector(EXT_index + 1);
+                     if (pakaddr(15) = '1') then
+                        ram_data_b     <= x"00";
+                        pakvalue       <= x"00";
+                     else
+                        case (pakaddr(1 downto 0)) is
+                           when "00" => ram_data_b <= sdram_dataRead( 7 downto  0); pakvalue <= sdram_dataRead( 7 downto  0);
+                           when "01" => ram_data_b <= sdram_dataRead(15 downto  8); pakvalue <= sdram_dataRead(15 downto  8);
+                           when "10" => ram_data_b <= sdram_dataRead(23 downto 16); pakvalue <= sdram_dataRead(23 downto 16);
+                           when "11" => ram_data_b <= sdram_dataRead(31 downto 24); pakvalue <= sdram_dataRead(31 downto 24);
+                           when others => null;
+                        end case;
+                     end if;
+                     pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
+                  end if;
+                  
+               when EXTCOMM_PAKREAD_CHECKNEXT =>
+                  if (pakaddr(4 downto 0) = 5x"0") then
+                     state          <= EXTCOMM_RESPONSE_VALIDOVER;
+                     ram_wren_b     <= '1';
+                     EXT_index      <= EXT_index + 1;
+                     ram_address_b  <= std_logic_vector(EXT_index + 1);
+                     ram_data_b     <= pakcrc_value;
+                  else
+                     state <= EXTCOMM_PAKREAD_READSDRAM;
+                  end if;
+                  
+               -- reponses for PAK write
+               when EXTCOMM_PAKWRITE_READPIF =>
+                  state          <= EXTCOMM_PAKWRITE_WRITESDRAM;
+                  pakvalue       <= (others => '0');
+                  EXT_index      <= EXT_index + 1;
+                  ram_address_b  <= std_logic_vector(EXT_index + 1);
+                  EXT_send       <= EXT_send - 1;
+                  pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
+                  if (pakaddr(15) = '0') then
+                     cpak_change     <= '1';
+                     sdram_request   <= '1';
+                     sdram_rnw       <= '0';
+                     sdram_address   <= resize(EXT_channel & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
+                     sdram_dataWrite <= ram_q_b & ram_q_b & ram_q_b & ram_q_b;
+                     pakvalue        <= ram_q_b;
+                     case (pakaddr(1 downto 0)) is
+                        when "00" => sdram_writeMask <= "0001";
+                        when "01" => sdram_writeMask <= "0010";
+                        when "10" => sdram_writeMask <= "0100";
+                        when "11" => sdram_writeMask <= "1000";
+                        when others => null;
+                     end case;
+                  end if;
+                  
+               when EXTCOMM_PAKWRITE_WRITESDRAM =>
+                  if (sdram_done = '1' or pakaddr(15) = '1') then
+                     state          <= EXTCOMM_PAKCRC;
+                     pakcrc_count   <= (others => '0');
+                     pakcrc_last    <= '0';
+                     if (EXT_send = 0) then -- last byte will need one additional round of crc with input value 00
+                        pakcrc_last <= '1';
+                     end if;
+                  end if;
+
+               when EXTCOMM_PAKWRITE_CHECKNEXT =>
+                  if (EXT_send = 0) then
+                     state               <= EXTCOMM_RESPONSE_VALIDOVER;
+                     EXT_index           <= EXT_index - 1;
+                     EXT_responsedata(0) <= pakcrc_value;
+                  else
+                     state      <= EXTCOMM_PAKWRITE_READPIF;
+                  end if;
 
                -- responses for EEProm/RTC
                when EXTCOMM_EEPROMINFO =>
@@ -660,7 +945,7 @@ begin
                when EXTCOMM_EEPROMREAD_SETADDR =>
                   state             <= EXTCOMM_EEPROMREAD_DATAREAD;
                   eeprom_addr_b     <= ram_q_b & "000";
-                  EXP_responseindex <= (others => '0');
+                  EXT_skip          <= '1';
                      
                when EXTCOMM_EEPROMREAD_DATAREAD =>
                   state                     <= EXTCOMM_EEPROMREAD_DATAWRITE;
@@ -672,8 +957,10 @@ begin
                   else
                      state <= EXTCOMM_EEPROMREAD_DATAREAD;
                   end if;
-                  EXT_responsedata(to_integer(EXP_responseindex(2 downto 0))) <= eeprom_out_b;
-                  EXP_responseindex <= EXP_responseindex + 1;
+                  ram_wren_b        <= '1';
+                  EXT_index         <= EXT_index + 1;
+                  ram_address_b     <= std_logic_vector(EXT_index + 1);
+                  ram_data_b        <= eeprom_out_b;
                   
                -- eeprom write
                when EXTCOMM_EEPROMWRITE_READADDR =>
@@ -715,7 +1002,7 @@ begin
                   
                -- response writeback
                when EXTCOMM_RESPONSE_VALIDOVER =>
-                  if (EXT_receive > 0 and EXT_valid = '1') then
+                  if (EXT_receive > 0 and EXT_valid = '1' and EXT_skip = '0') then
                      state         <= EXTCOMM_RESPONSE_WRITE;
                   else
                      state         <= EXTCOMM_RESPONSE_END;
@@ -791,26 +1078,6 @@ begin
    eeprom_addr_a <= eeprom_addr_clear when (EEPROMState = EEPROM_CLEAR) else eeprom_addr;
    eeprom_wren_a <= '1'               when (EEPROMState = EEPROM_CLEAR) else eeprom_wren;
    eeprom_in_a   <= x"FFFFFFFF"       when (EEPROMState = EEPROM_CLEAR) else eeprom_in;
-   
-   process (clk1x)
-   begin
-      if rising_edge(clk1x) then
-      
-         case (EEPROMState) is
-         
-            when EEPROM_IDLE =>
-               null;
-               
-            when EEPROM_CLEAR =>
-               eeprom_addr_clear <= std_logic_vector(unsigned(eeprom_addr_clear) + 1);
-               if (eeprom_addr_clear = 9x"1FF") then
-                   EEPROMState <= EEPROM_IDLE;
-               end if;
-         
-         end case;
-         
-      end if;
-   end process;
 
 --##############################################################
 --############################### export
