@@ -80,6 +80,7 @@ entity n64top is
       PADTYPE1                : in  std_logic_vector(1 downto 0);
       PADTYPE2                : in  std_logic_vector(1 downto 0);
       PADTYPE3                : in  std_logic_vector(1 downto 0);
+      rumble                  : out std_logic_vector(3 downto 0);
       pad_A                   : in  std_logic_vector(3 downto 0);
       pad_B                   : in  std_logic_vector(3 downto 0);
       pad_Z                   : in  std_logic_vector(3 downto 0);
@@ -959,6 +960,8 @@ begin
       pad_2_analog_v       => pad_2_analog_v,
       pad_3_analog_h       => pad_3_analog_h,
       pad_3_analog_v       => pad_3_analog_v,
+      
+      rumble               => rumble,
       
       eeprom_addr          => eeprom_addr,  
       eeprom_wren          => eeprom_wren,  

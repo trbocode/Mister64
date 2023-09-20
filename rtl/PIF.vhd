@@ -71,6 +71,8 @@ entity pif is
       pad_3_analog_h       : in  std_logic_vector(7 downto 0);
       pad_3_analog_v       : in  std_logic_vector(7 downto 0);
       
+      rumble               : out std_logic_vector(3 downto 0) := (others => '0');
+      
       eeprom_addr          : in  std_logic_vector(8 downto 0);
       eeprom_wren          : in  std_logic;
       eeprom_in            : in  std_logic_vector(31 downto 0);
@@ -408,6 +410,11 @@ begin
                end if;
                
          end case;
+         
+         if (PADTYPE0 /= "10") then rumble(0) <= '0'; end if;
+         if (PADTYPE1 /= "10") then rumble(1) <= '0'; end if;
+         if (PADTYPE2 /= "10") then rumble(2) <= '0'; end if;
+         if (PADTYPE3 /= "10") then rumble(3) <= '0'; end if;
       
          if (reset = '1') then
             
@@ -433,6 +440,8 @@ begin
                state      <= CLEARRAM;
                ram_wren_b <= '1';
             end if;
+            
+            rumble <= (others => '0');
             
          elsif (ce = '1') then
          
@@ -846,17 +855,27 @@ begin
                      ram_wren_b     <= '1';
                      EXT_index      <= EXT_index + 1;
                      ram_address_b  <= std_logic_vector(EXT_index + 1);
-                     if (pakaddr(15) = '1') then
-                        ram_data_b     <= x"00";
-                        pakvalue       <= x"00";
-                     else
-                        case (pakaddr(1 downto 0)) is
-                           when "00" => ram_data_b <= sdram_dataRead( 7 downto  0); pakvalue <= sdram_dataRead( 7 downto  0);
-                           when "01" => ram_data_b <= sdram_dataRead(15 downto  8); pakvalue <= sdram_dataRead(15 downto  8);
-                           when "10" => ram_data_b <= sdram_dataRead(23 downto 16); pakvalue <= sdram_dataRead(23 downto 16);
-                           when "11" => ram_data_b <= sdram_dataRead(31 downto 24); pakvalue <= sdram_dataRead(31 downto 24);
-                           when others => null;
-                        end case;
+                     if (PADTYPE = "10") then -- rumble
+                        if (unsigned(pakaddr) >= 16#8000# and unsigned(pakaddr) < 16#9000#) then
+                           ram_data_b     <= x"80";
+                           pakvalue       <= x"80";
+                        else
+                           ram_data_b     <= x"00";
+                           pakvalue       <= x"00";
+                        end if;
+                     else --cpak
+                        if (pakaddr(15) = '1') then
+                           ram_data_b     <= x"00";
+                           pakvalue       <= x"00";
+                        else
+                           case (pakaddr(1 downto 0)) is
+                              when "00" => ram_data_b <= sdram_dataRead( 7 downto  0); pakvalue <= sdram_dataRead( 7 downto  0);
+                              when "01" => ram_data_b <= sdram_dataRead(15 downto  8); pakvalue <= sdram_dataRead(15 downto  8);
+                              when "10" => ram_data_b <= sdram_dataRead(23 downto 16); pakvalue <= sdram_dataRead(23 downto 16);
+                              when "11" => ram_data_b <= sdram_dataRead(31 downto 24); pakvalue <= sdram_dataRead(31 downto 24);
+                              when others => null;
+                           end case;
+                        end if;
                      end if;
                      pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
                   end if;
@@ -875,29 +894,34 @@ begin
                -- reponses for PAK write
                when EXTCOMM_PAKWRITE_READPIF =>
                   state          <= EXTCOMM_PAKWRITE_WRITESDRAM;
-                  pakvalue       <= (others => '0');
+                  pakvalue       <= ram_q_b;
                   EXT_index      <= EXT_index + 1;
                   ram_address_b  <= std_logic_vector(EXT_index + 1);
                   EXT_send       <= EXT_send - 1;
                   pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
-                  if (pakaddr(15) = '0') then
-                     cpak_change     <= '1';
-                     sdram_request   <= '1';
-                     sdram_rnw       <= '0';
-                     sdram_address   <= resize(EXT_channel & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
-                     sdram_dataWrite <= ram_q_b & ram_q_b & ram_q_b & ram_q_b;
-                     pakvalue        <= ram_q_b;
-                     case (pakaddr(1 downto 0)) is
-                        when "00" => sdram_writeMask <= "0001";
-                        when "01" => sdram_writeMask <= "0010";
-                        when "10" => sdram_writeMask <= "0100";
-                        when "11" => sdram_writeMask <= "1000";
-                        when others => null;
-                     end case;
+                  if (PADTYPE = "10") then -- rumble
+                     if (pakaddr = x"C000") then
+                        rumble(to_integer(EXT_channel(1 downto 0))) <= ram_q_b(0);
+                     end if;
+                  else -- cpak
+                     if (pakaddr(15) = '0') then
+                        cpak_change     <= '1';
+                        sdram_request   <= '1';
+                        sdram_rnw       <= '0';
+                        sdram_address   <= resize(EXT_channel & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
+                        sdram_dataWrite <= ram_q_b & ram_q_b & ram_q_b & ram_q_b;
+                        case (pakaddr(1 downto 0)) is
+                           when "00" => sdram_writeMask <= "0001";
+                           when "01" => sdram_writeMask <= "0010";
+                           when "10" => sdram_writeMask <= "0100";
+                           when "11" => sdram_writeMask <= "1000";
+                           when others => null;
+                        end case;
+                     end if;
                   end if;
                   
                when EXTCOMM_PAKWRITE_WRITESDRAM =>
-                  if (sdram_done = '1' or pakaddr(15) = '1') then
+                  if (sdram_done = '1' or pakaddr(15) = '1' or PADTYPE = "10") then
                      state          <= EXTCOMM_PAKCRC;
                      pakcrc_count   <= (others => '0');
                      pakcrc_last    <= '0';

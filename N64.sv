@@ -346,6 +346,8 @@ wire        img_mounted;
 wire        img_readonly;
 wire [31:0] img_size;
 
+wire [3:0] rumble;
+
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 (
 	.clk_sys(clk_1x),
@@ -380,6 +382,11 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
    .joystick_l_analog_1(joystick_analog_l1),
    .joystick_l_analog_2(joystick_analog_l2),
    .joystick_l_analog_3(joystick_analog_l3),
+   
+   .joystick_0_rumble(rumble[0] ? 16'hFFFF : 16'h0000),
+   .joystick_1_rumble(rumble[1] ? 16'hFFFF : 16'h0000),
+   .joystick_2_rumble(rumble[2] ? 16'hFFFF : 16'h0000),
+   .joystick_3_rumble(rumble[3] ? 16'hFFFF : 16'h0000),
    
    .sd_lba('{sd_lba}),
 	.sd_rd(sd_rd),
@@ -536,12 +543,15 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 wire  bk_pending;
 
 wire bk_load     = status[40] | (cart_download & img_mounted);
-wire bk_save     = status[41] | (OSD_STATUS & ~status[42]);
+wire bk_save     = status[41] | (OSD_STATUS & ~OSD_STATUS_1 & ~status[42]);
 
 reg use_img;
+reg OSD_STATUS_1 = 0;
 
 always @(posedge clk_1x) begin
 	reg old_downloading;
+   
+   OSD_STATUS_1 <= OSD_STATUS;
 
 	old_downloading <= cart_download;
 	if(~old_downloading & cart_download) use_img <= 0;
@@ -636,6 +646,7 @@ n64top
    .PADTYPE1         (status[53:52]),
    .PADTYPE2         (status[55:54]),
    .PADTYPE3         (status[57:56]),
+   .rumble           (rumble),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),
    .pad_Z            ({joy4[ 9],joy3[ 9],joy2[ 9],joy[ 9]}),
