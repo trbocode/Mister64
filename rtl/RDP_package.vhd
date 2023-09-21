@@ -61,6 +61,27 @@ package pRDP is
       tile           => (others => '0'),
       others => (others => '0')
    );  
+   
+   type tsettings_KEYRGB is record
+      center_R  : unsigned(7 downto 0);
+      center_G  : unsigned(7 downto 0);
+      center_B  : unsigned(7 downto 0);      
+      scale_R   : unsigned(7 downto 0);
+      scale_G   : unsigned(7 downto 0);
+      scale_B   : unsigned(7 downto 0);      
+      width_R   : unsigned(11 downto 0);
+      width_G   : unsigned(11 downto 0);
+      width_B   : unsigned(11 downto 0);
+   end record; 
+
+   type tsettings_Convert is record
+      K0  : signed(8 downto 0);
+      K1  : signed(8 downto 0);
+      K2  : signed(8 downto 0);
+      K3  : signed(8 downto 0);
+      K4  : signed(8 downto 0);
+      K5  : signed(8 downto 0);
+   end record;
 
    type tsettings_scissor is record
       ScissorXL     : unsigned(11 downto 0);

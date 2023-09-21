@@ -91,10 +91,9 @@ begin
          
          when SIZE_4BIT =>
             case (settings_tile_1.Tile_format) is
-               when FORMAT_RGBA => error_texMode <= '1'; -- should not be allowed
                when FORMAT_YUV => error_texMode <= '1'; -- should not be allowed
                
-               when FORMAT_CI =>
+               when FORMAT_RGBA | FORMAT_CI => -- 4 bit RGBA behaves like CI
                   -- synthesis translate_off
                   exportNext_TexFt_addr <= 20x"0" & '1' & unsigned(tex_palette_addr) & "000";
                   exportNext_TexFt_db1  <= resize(addr_base_1, 32);
@@ -137,9 +136,10 @@ begin
          
          when SIZE_8BIT =>
             case (settings_tile_1.Tile_format) is
-               when FORMAT_RGBA => error_texMode <= '1'; -- should not be allowed
+
                when FORMAT_YUV => error_texMode <= '1'; -- should not be allowed
-               when FORMAT_CI =>
+               
+               when FORMAT_RGBA | FORMAT_CI => -- 8 bit RGBA behaves like CI
                   -- synthesis translate_off
                   exportNext_TexFt_addr <= 20x"0" & '1' & unsigned(tex_palette_addr) & "000";
                   exportNext_TexFt_db1  <= resize(addr_base_1, 32);
@@ -311,10 +311,11 @@ begin
          tex_color(2) <= (others => '0');
          tex_color(3) <= (others => '0');
       
-         case (settings_tile_2.Tile_format) is
-            when FORMAT_RGBA => null;
-            when FORMAT_YUV => null;
-            when FORMAT_CI =>
+         if (
+             (settings_tile_2.Tile_format = FORMAT_CI) or 
+             ((settings_tile_2.Tile_format = FORMAT_RGBA and (settings_tile_2.Tile_size = SIZE_4BIT or settings_tile_2.Tile_size = SIZE_8BIT)))
+            ) then
+            
                if (settings_otherModes.tlutType = '1') then
                   tex_color(0) <= palette16(15 downto 8);
                   tex_color(1) <= palette16(15 downto 8);
@@ -340,10 +341,7 @@ begin
                   export_TexFt_db3(31 downto 8)   <= x"00" & palette16;
                   -- synthesis translate_on
                end if;
-            when FORMAT_IA => null;
-            when FORMAT_I => null;
-            when others => null;
-         end case;
+         end if;
       else
          tex_color(0) <= tex_color_save(0);
          tex_color(1) <= tex_color_save(1);

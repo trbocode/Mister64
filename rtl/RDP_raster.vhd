@@ -1227,7 +1227,7 @@ begin
                when LOADRAM2 =>
                   loadstate           <= LOADLINE;
                   TextureRAMData_1    <= TextureReqRAMData;
-                  if (memAdvance /= 2 or load_MemAddr(2 downto 1) = 2) then 
+                  if (memAdvance /= 2 or load_MemAddr(2 downto 1) = 3) then 
                      TextureReqRAM_index <= TextureReqRAM_index + 1;
                   end if;
                

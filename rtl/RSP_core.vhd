@@ -920,21 +920,21 @@ begin
                         end if;
                         
                         if (decodeLastVectorWrite1 = '1' and (
-                           (decodeLastVectorTranspose1 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget1(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget1)) or
+                           (decodeLastVectorTranspose1 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget1(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget1(4 downto 3))) or
                            (decodeLastVectorTranspose1 = '0' and (decVS             = decodeLastVectorTarget1             or decVT             = decodeLastVectorTarget1)))) then
                               stall2           <= '1';
                               decodeNew        <= '0';
                               decodeVectorNew  <= '0';
                               decodeStallCount <= 2;
                         elsif (decodeLastVectorWrite2 = '1' and (
-                           (decodeLastVectorTranspose2 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget2(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget2)) or
+                           (decodeLastVectorTranspose2 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget2(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget2(4 downto 3))) or
                            (decodeLastVectorTranspose2 = '0' and (decVS             = decodeLastVectorTarget2             or decVT             = decodeLastVectorTarget2)))) then
                               stall2           <= '1';
                               decodeNew        <= '0';
                               decodeVectorNew  <= '0';
                               decodeStallCount <= 1;
                         elsif (decodeLastVectorWrite3 = '1' and (
-                           (decodeLastVectorTranspose3 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget3(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget3)) or
+                           (decodeLastVectorTranspose3 = '1' and (decVS(4 downto 3) = decodeLastVectorTarget3(4 downto 3) or decVT(4 downto 3) = decodeLastVectorTarget3(4 downto 3))) or
                            (decodeLastVectorTranspose3 = '0' and (decVS             = decodeLastVectorTarget3             or decVT             = decodeLastVectorTarget3)))) then
                               stall2           <= '1';
                               decodeNew        <= '0';

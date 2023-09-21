@@ -1432,10 +1432,13 @@ begin
          
          if (fillWrite = '1') then
          
+            -- assume that fill start from 4(16?) pixel aligned address. If that is not the case, old data must be read back first to prefill
+         
             if (pixel9filled = '0' or fillAddr(22 downto 5) /= unsigned(pixel9Addr)) then
                rdp9fifo_Wr  <= pixel9filled and write9;
                pixel9Addr   <= std_logic_vector(fillAddr(22 downto 5));
                pixel9filled <= '1';
+               pixel9data   <= (others => '0');
             end if;
             
             case (fillAddr(4 downto 3)) is

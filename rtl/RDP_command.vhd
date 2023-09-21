@@ -42,6 +42,8 @@ entity RDP_command is
       tileSize_WrData         : out std_logic_vector(47 downto 0) := (others => '0');
       tileSize_we             : out std_logic := '0';
       
+      settings_KEYRGB         : out tsettings_KEYRGB := (others => (others => '0'));
+      settings_Convert        : out tsettings_Convert := (others => (others => '0'));
       settings_scissor        : out tsettings_scissor := SETTINGSSCISSORINIT;
       settings_Z              : out tsettings_Z := (others => (others => '0'));
       settings_otherModes     : out tsettings_otherModes := SETTINGSOTHERMODESINIT;
@@ -228,6 +230,30 @@ begin
                         commandWordDone <= '1';
                         sync_full       <= '1';
                         -- todo
+                        
+                     when 6x"2A" => -- set key GB
+                        commandWordDone <= '1';
+                        settings_KEYRGB.scale_B  <= CommandData( 7 downto  0);
+                        settings_KEYRGB.center_B <= CommandData(15 downto  8);
+                        settings_KEYRGB.scale_G  <= CommandData(23 downto 16);
+                        settings_KEYRGB.center_G <= CommandData(31 downto 24);
+                        settings_KEYRGB.width_B  <= CommandData(43 downto 32);
+                        settings_KEYRGB.width_G  <= CommandData(55 downto 44);
+                        
+                     when 6x"2B" => -- set key R
+                        commandWordDone <= '1';
+                        settings_KEYRGB.scale_R  <= CommandData( 7 downto  0);
+                        settings_KEYRGB.center_R <= CommandData(15 downto  8);
+                        settings_KEYRGB.width_R  <= CommandData(27 downto 16);
+                        
+                     when 6x"2C" => -- set convert
+                        commandWordDone <= '1';
+                        settings_Convert.K5 <= signed(CommandData( 8 downto  0));
+                        settings_Convert.K4 <= signed(CommandData(17 downto  9));
+                        settings_Convert.K3 <= signed(CommandData(26 downto 18));
+                        settings_Convert.K2 <= signed(CommandData(35 downto 27));
+                        settings_Convert.K1 <= signed(CommandData(44 downto 36));
+                        settings_Convert.K0 <= signed(CommandData(53 downto 45));
                   
                      when 6x"2D" => -- set scissor
                         commandWordDone <= '1';
