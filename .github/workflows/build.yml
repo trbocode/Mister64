@@ -53,6 +53,7 @@ jobs:
           cp external_files.csv db_tmp
           cd db_tmp
           set -o pipefail && curl --fail --location https://raw.githubusercontent.com/theypsilon/Downloader_DB-Template_MiSTer/main/.github/build_db.py | python3 - -d
+          if [ ! -f db.json ]; then exit 0; fi
           cp db.json ..
       - name: Push database
         run: |
