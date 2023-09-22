@@ -244,8 +244,6 @@ architecture arch of RDP_raster is
    signal lineInfo      : tlineInfo := (y => (others => '0'), xStart => (others => '0'), xEnd => (others => '0'), others => (others => '0'));
    signal startLine     : std_logic := '0';
    
-   signal FB9Offset     : unsigned(3 downto 0) := (others => '0');
-   
    -- line drawing
    type tlineState is 
    (  
@@ -341,6 +339,7 @@ architecture arch of RDP_raster is
    -- comb calculation
    signal calcPixelAddr    : unsigned(25 downto 0);
    signal calcPixelAddrZ   : unsigned(25 downto 0);
+   signal calcPixelStartZ  : unsigned(25 downto 0);
    
    signal calcCopySizeFlip : unsigned(11 downto 0);
    signal calcCopySize     : unsigned(11 downto 0);
@@ -715,7 +714,6 @@ begin
                      FBZaddr   <= calcZAddr;
                      FBsize    <= lineInfo.xEnd - lineInfo.xStart;
                      FBodd     <= lineInfo.y(0);
-                     FB9Offset <= calcZAddr(4 downto 1);
                   else
                      startLine <= '1';
                      if (startLine = '1') then
@@ -768,7 +766,8 @@ begin
    calcPixelAddr <= resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
                     resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 4, 26);
    
-   calcPixelAddrZ <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26);
+   calcPixelAddrZ  <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26);
+   calcPixelStartZ <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26);
   
    calcIndex      <= lineInfo.xEnd - lineInfo.xStart;
    
@@ -893,17 +892,13 @@ begin
                      line_endX    <= lineInfo.xEnd;
                      line_indexX  <= (others => '0');
                      line_indexX9 <= (others => '0');
+                     line_indexX9(3 downto 0) <= calcPixelStartZ(4 downto 1);
                   else
                      line_posX    <= lineInfo.xEnd;
                      line_endX    <= lineInfo.xStart;
                      line_indexX  <= calcIndex;
-                     line_indexX9 <= calcIndex;
-                     if ((to_integer(calcIndex(3 downto 0)) + to_integer(FB9Offset)) >= 16) then
-                        line_indexX9 <= calcIndex + 16;
-                     end if;
+                     line_indexX9 <= calcIndex + to_integer(calcPixelStartZ(4 downto 1));
                   end if;
-                  
-                  line_indexX9(3 downto 0) <= calcPixelAddrZ(4 downto 1);
                   
                   case (settings_colorImage.FB_size) is
                      when SIZE_8BIT  => line_offsetPx <= lineInfo.xStart(2 downto 0);

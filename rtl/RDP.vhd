@@ -492,7 +492,7 @@ begin
                   when others   => null;             
                end case;
                
-               if (bus_read_latched = '1' and RSP_RDP_reg_read = '0') then
+               if (bus_read_latched = '1' and RSP_RDP_reg_write = '0' and RSP_RDP_reg_read = '0') then
                   bus_done         <= '1';
                   bus_dataRead     <= var_dataRead;
                   bus_read_latched <= '0';
@@ -509,13 +509,13 @@ begin
                   DPC_CURRENT   <= DPC_CURRENT + 8;
                end if;
                
-               if (bus_write_latched = '1' or RSP_RDP_reg_write = '1') then
+               if (bus_write_latched = '1' and RSP_RDP_reg_write = '0' and RSP_RDP_reg_read = '0') then
+                  bus_write_latched <= '0';
+                  bus_done          <= '1';
+               end if;
                
-                  if (bus_write_latched = '1' and RSP_RDP_reg_write = '0') then
-                     bus_write_latched <= '0';
-                     bus_done          <= '1';
-                  end if;
-                  
+               if ((bus_write_latched = '1' and RSP_RDP_reg_read = '0') or RSP_RDP_reg_write = '1') then
+ 
                   case (reg_addr(19 downto 0)) is
                      when x"00000" =>
                         if (DPC_STATUS_start_pending = '0') then -- wrong according to n64brew, should always update, systemtest proves otherwise!

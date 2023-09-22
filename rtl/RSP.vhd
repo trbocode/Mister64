@@ -200,6 +200,11 @@ architecture arch of RSP is
    signal core_reg_RSP_read         : std_logic;
    signal core_reg_RSP_write        : std_logic;
    signal core_reg_RSP_dataRead     : unsigned(31 downto 0);
+   
+   -- savestates
+   type t_ssarray is array(0 to 3) of std_logic_vector(63 downto 0);
+   signal ss_in  : t_ssarray := (others => (others => '0'));  
+   signal ss_out : t_ssarray := (others => (others => '0'));  
 
 begin 
 
@@ -228,6 +233,8 @@ begin
          error_Addr     <= '0';
          error_PCON     <= '0';
          
+         PC_trigger     <= '0';
+         
          mem_address_a_1 <= mem_address_a;
          fifoout_Wr_1    <= fifoout_Wr;
       
@@ -241,21 +248,21 @@ begin
             SP_DMA_COUNT               <= (others => '0');
             SP_DMA_SKIP                <= (others => '0');
             SP_STATUS_halt             <= '1';
-            SP_STATUS_broke            <= '0';
+            SP_STATUS_broke            <= ss_in(0)(38);
             SP_STATUS_dmabusy          <= '0';
             SP_STATUS_dmafull          <= '0';
             SP_STATUS_iofull           <= '0';
-            SP_STATUS_singlestep       <= '0';
-            SP_STATUS_irqonbreak       <= '0';
-            SP_STATUS_signal0set       <= '0';
-            SP_STATUS_signal1set       <= '0';
-            SP_STATUS_signal2set       <= '0';
-            SP_STATUS_signal3set       <= '0';
-            SP_STATUS_signal4set       <= '0';
-            SP_STATUS_signal5set       <= '0';
-            SP_STATUS_signal6set       <= '0';
-            SP_STATUS_signal7set       <= '0';
-            SP_SEMAPHORE               <= '0';
+            SP_STATUS_singlestep       <= ss_in(0)(42);
+            SP_STATUS_irqonbreak       <= ss_in(0)(43);
+            SP_STATUS_signal0set       <= ss_in(0)(44);
+            SP_STATUS_signal1set       <= ss_in(0)(45);
+            SP_STATUS_signal2set       <= ss_in(0)(46);
+            SP_STATUS_signal3set       <= ss_in(0)(47);
+            SP_STATUS_signal4set       <= ss_in(0)(48);
+            SP_STATUS_signal5set       <= ss_in(0)(49);
+            SP_STATUS_signal6set       <= ss_in(0)(50);
+            SP_STATUS_signal7set       <= ss_in(0)(51);
+            SP_SEMAPHORE               <= ss_in(1)(37);
             SP_PC                      <= (others => '0');
             
             SP_DMA_CURRENT_SPADDR      <= (others => '0');
@@ -280,6 +287,9 @@ begin
             
             DMASTATE                   <= DMA_IDLE;
             fifoout_req                <= '0';
+            
+            SP_PC                      <= unsigned(ss_in(0)(63 downto 52));   
+            PC_trigger                 <= '1';
  
          elsif (ce = '1') then
          
@@ -348,14 +358,14 @@ begin
                when x"40018" => var_dataRead(0) := SP_STATUS_dmabusy or SP_STATUS_dmafull; -- games check for busy right after starting DMA in previous cycle  
                when x"4001C" => 
                   var_dataRead(0) := SP_SEMAPHORE;   
-                  if (bus_reg_req_read = '1' or core_reg_RSP_read = '1') then       
+                  if ((bus_reg_req_read = '1' and core_reg_RSP_write = '0') or core_reg_RSP_read = '1') then       
                      SP_SEMAPHORE  <= '1';
                   end if;
                when x"80000" => var_dataRead(11 downto 0) := std_logic_vector(SP_PC);    
                when others   => null;
             end case;
               
-            if (bus_reg_req_read = '1' and core_reg_RSP_read = '0') then
+            if (bus_reg_req_read = '1' and core_reg_RSP_read = '0' and core_reg_RSP_write = '0') then
                bus_done         <= '1';              
                bus_dataRead     <= var_dataRead;
                bus_reg_req_read <= '0';
@@ -376,7 +386,7 @@ begin
                SP_PC <= PC_out;
             end if;
             
-            if (bus_reg_req_write = '1' and core_reg_RSP_write = '0') then
+            if (bus_reg_req_write = '1' and core_reg_RSP_read = '0' and core_reg_RSP_write = '0') then
                bus_done          <= '1';
                bus_reg_req_write <= '0';
             end if;
@@ -385,8 +395,7 @@ begin
                RSP2RDP_req_latched <= '1';
             end if;
             
-            PC_trigger <= '0';
-            if (bus_reg_req_write = '1' or core_reg_RSP_write = '1') then
+            if ((bus_reg_req_write = '1' and core_reg_RSP_read = '0') or core_reg_RSP_write = '1') then
                
                case (reg_addr(19 downto 2) & "00") is
                   when x"40000" => SP_DMA_SPADDR  <= unsigned(reg_dataWrite(12 downto 3));   
@@ -787,8 +796,27 @@ begin
       error_stall           => error_stall
    );
         
+--##############################################################
+--############################### savestates
+--##############################################################
+
    SS_DataRead <= (others => '0');
    SS_idle     <= '1';
+
+   process (clk1x)
+   begin
+      if (rising_edge(clk1x)) then
+      
+         if (SS_reset = '1') then
+            for i in 0 to 3 loop
+               ss_in(i) <= (others => '0');
+            end loop; 
+         elsif (SS_wren_RSP = '1') then
+            ss_in(to_integer(SS_Adr)) <= SS_DataWrite;
+         end if;
+      
+      end if;
+   end process;
         
 end architecture;
 
