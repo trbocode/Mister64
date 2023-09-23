@@ -187,12 +187,18 @@ begin
                   tex_color_read(2) <= data16( 5 downto  1) & data16( 5 downto  3);
                   if (data16(0) = '1') then tex_alpha_read <= (others => '1'); else tex_alpha_read <= (others => '0'); end if;
                   -- synthesis translate_off
-                  exportNext_TexFt_addr <= (others => '0');
+                  if (settings_otherModes.enTlut = '1') then
+                     exportNext_TexFt_addr <= x"00000" & '1' & data16(15 downto 8) & "000";
+                     exportNext_TexFt_db1  <= resize(addr_base_1, 32);
+                  else
+                     exportNext_TexFt_addr <= (others => '0');
+                     exportNext_TexFt_db1  <= resize(addr_base_1 & '0', 32);
+                  end if;
                   exportNext_TexFt_data(23 downto 16) <= data16(15 downto 11) & data16(15 downto 13);
                   exportNext_TexFt_data(15 downto  8) <= data16(10 downto  6) & data16(10 downto  8);
                   exportNext_TexFt_data( 7 downto  0) <= data16( 5 downto  1) & data16( 5 downto  3);
                   if (data16(0) = '1') then exportNext_TexFt_data(31 downto 24) <= (others => '1'); else exportNext_TexFt_data(31 downto 24) <= (others => '0'); end if;
-                  exportNext_TexFt_db1  <= resize(addr_base_1 & '0', 32);
+                  
                   exportNext_TexFt_db3  <= x"0000" & data16;
                   -- synthesis translate_on
                
@@ -311,36 +317,40 @@ begin
          tex_color(2) <= (others => '0');
          tex_color(3) <= (others => '0');
       
-         if (
-             (settings_tile_2.Tile_format = FORMAT_CI) or 
-             ((settings_tile_2.Tile_format = FORMAT_RGBA and (settings_tile_2.Tile_size = SIZE_4BIT or settings_tile_2.Tile_size = SIZE_8BIT)))
-            ) then
-            
-               if (settings_otherModes.tlutType = '1') then
-                  tex_color(0) <= palette16(15 downto 8);
-                  tex_color(1) <= palette16(15 downto 8);
-                  tex_color(2) <= palette16(15 downto 8);
-                  tex_color(3) <= palette16(7 downto 0);
-                  -- synthesis translate_off
-                  export_TexFt_data(23 downto 16) <= palette16(15 downto 8);
-                  export_TexFt_data(15 downto  8) <= palette16(15 downto 8);
-                  export_TexFt_data( 7 downto  0) <= palette16(15 downto 8);
-                  export_TexFt_data(31 downto 24) <= palette16(7 downto 0);
+         if (settings_tile_2.Tile_format = FORMAT_CI or settings_tile_2.Tile_format = FORMAT_RGBA) then
+            if (settings_otherModes.tlutType = '1') then
+               tex_color(0) <= palette16(15 downto 8);
+               tex_color(1) <= palette16(15 downto 8);
+               tex_color(2) <= palette16(15 downto 8);
+               tex_color(3) <= palette16(7 downto 0);
+               -- synthesis translate_off
+               export_TexFt_data(23 downto 16) <= palette16(15 downto 8);
+               export_TexFt_data(15 downto  8) <= palette16(15 downto 8);
+               export_TexFt_data( 7 downto  0) <= palette16(15 downto 8);
+               export_TexFt_data(31 downto 24) <= palette16(7 downto 0);
+               if (settings_tile_1.Tile_size = SIZE_4BIT or settings_tile_1.Tile_size = SIZE_8BIT) then
                   export_TexFt_db3(31 downto 8)   <= x"00" & palette16;
-                  -- synthesis translate_on
                else
-                  tex_color(0) <= palette16(15 downto 11) & palette16(15 downto 13);
-                  tex_color(1) <= palette16(10 downto  6) & palette16(10 downto  8);
-                  tex_color(2) <= palette16( 5 downto  1) & palette16( 5 downto  3);
-                  if (palette16(0) = '1') then tex_color(3) <= (others => '1'); else tex_color(3) <= (others => '0'); end if;
-                  -- synthesis translate_off
-                  export_TexFt_data(23 downto 16) <= palette16(15 downto 11) & palette16(15 downto 13);
-                  export_TexFt_data(15 downto  8) <= palette16(10 downto  6) & palette16(10 downto  8);
-                  export_TexFt_data( 7 downto  0) <= palette16( 5 downto  1) & palette16( 5 downto  3);
-                  if (palette16(0) = '1') then export_TexFt_data(31 downto 24) <= (others => '1'); else export_TexFt_data(31 downto 24) <= (others => '0'); end if;
-                  export_TexFt_db3(31 downto 8)   <= x"00" & palette16;
-                  -- synthesis translate_on
+                  export_TexFt_db3(31 downto 16)  <= palette16;
                end if;
+               -- synthesis translate_on
+            else
+               tex_color(0) <= palette16(15 downto 11) & palette16(15 downto 13);
+               tex_color(1) <= palette16(10 downto  6) & palette16(10 downto  8);
+               tex_color(2) <= palette16( 5 downto  1) & palette16( 5 downto  3);
+               if (palette16(0) = '1') then tex_color(3) <= (others => '1'); else tex_color(3) <= (others => '0'); end if;
+               -- synthesis translate_off
+               export_TexFt_data(23 downto 16) <= palette16(15 downto 11) & palette16(15 downto 13);
+               export_TexFt_data(15 downto  8) <= palette16(10 downto  6) & palette16(10 downto  8);
+               export_TexFt_data( 7 downto  0) <= palette16( 5 downto  1) & palette16( 5 downto  3);
+               if (palette16(0) = '1') then export_TexFt_data(31 downto 24) <= (others => '1'); else export_TexFt_data(31 downto 24) <= (others => '0'); end if;
+               if (settings_tile_1.Tile_size = SIZE_4BIT or settings_tile_1.Tile_size = SIZE_8BIT) then
+                  export_TexFt_db3(31 downto 8)   <= x"00" & palette16;
+               else
+                  export_TexFt_db3(31 downto 16)  <= palette16;
+               end if;
+               -- synthesis translate_on
+            end if;
          end if;
       else
          tex_color(0) <= tex_color_save(0);
