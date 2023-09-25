@@ -117,6 +117,7 @@ begin
       DATACACHEFORCEWEB     => '0',
       DDR3SLOW              => "0000",
       DISABLEFILTER         => '0',
+      DISABLEDITHER         => '0',
       
       write9                => '1',
       read9                 => '1',
@@ -163,6 +164,7 @@ begin
       PADTYPE1              => "00",
       PADTYPE2              => "00",
       PADTYPE3              => "00",
+      PADDPADSWAP           => '0',
       pad_A                 => "0000",
       pad_B                 => "0000",
       pad_Z                 => "0000",

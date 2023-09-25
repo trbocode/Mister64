@@ -12,6 +12,7 @@ entity RDP_pipeline is
       reset                   : in  std_logic;
       
       DISABLEFILTER           : in  std_logic;
+      DISABLEDITHER           : in  std_logic;
       
       errorCombine            : out std_logic;
       error_combineAlpha      : out std_logic;
@@ -109,7 +110,7 @@ entity RDP_pipeline is
       writePixelAddr          : out unsigned(25 downto 0);
       writePixelX             : out unsigned(11 downto 0) := (others => '0');
       writePixelY             : out unsigned(11 downto 0) := (others => '0');
-      writePixelColor         : out tcolor3_u8 := (others => (others => '0'));
+      writePixelColorOut      : out tcolor3_u8 := (others => (others => '0'));
       writePixelCvg           : out unsigned(2 downto 0);
       writePixelFBData9       : out unsigned(31 downto 0);
       
@@ -154,6 +155,8 @@ architecture arch of RDP_pipeline is
    type t_stage_c12u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u12;
    type t_stage_c32u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u32;
    
+   type t_stage_u3O is array(0 to STAGE_OUTPUT) of unsigned(2 downto 0);
+   
    -- stage register
    signal stage_valid         : unsigned(0 to STAGE_OUTPUT - 1);
    signal stage_addr          : t_stage_u26 := (others => (others => '0'));
@@ -170,6 +173,8 @@ architecture arch of RDP_pipeline is
    signal stage_blendEna      : t_stage_std := (others => '0');
    signal stage_FBData9       : t_stage_u32 := (others => (others => '0'));
    signal stage_FBData9Z      : t_stage_u32 := (others => (others => '0'));
+   signal stage_ditherC       : t_stage_u3O := (others => (others => '0'));
+   signal stage_ditherA       : t_stage_u3 := (others => (others => '0'));
    signal stage_copySize      : t_stage_u4 := (others => (others => '0'));
       
    signal step2               : std_logic := '0';
@@ -193,6 +198,9 @@ architecture arch of RDP_pipeline is
    signal texture2_alpha      : unsigned(7 downto 0);
    signal texture_copy        : unsigned(63 downto 0);
    
+   signal ditherColor         : unsigned(2 downto 0);
+   signal ditherAlpha         : unsigned(2 downto 0);
+
    signal combine_color       : tcolor3_u8;
    signal combine_alpha       : unsigned(7 downto 0);
    signal combine_alpha2      : unsigned(7 downto 0);
@@ -273,6 +281,8 @@ architecture arch of RDP_pipeline is
    
    signal blendmul            : unsigned(17 downto 0);
    signal blenddiv            : tcolor3_u30;
+   
+   signal writePixelColor     : tcolor3_u8 := (others => (others => '0'));
 
    -- export only
    -- synthesis translate_off
@@ -621,6 +631,8 @@ begin
             stage_FBcolor(STAGE_COMBINER)  <= stage_FBcolor(STAGE_PALETTE);
             stage_FBData9(STAGE_COMBINER)  <= stage_FBData9(STAGE_PALETTE);
             stage_FBData9Z(STAGE_COMBINER) <= stage_FBData9Z(STAGE_PALETTE);      
+            stage_ditherC(STAGE_COMBINER)  <= ditherColor;      
+            stage_ditherA(STAGE_COMBINER)  <= ditherAlpha;      
 
             -- todo: non 16 bit mode
             copyPixel <= stage_valid(STAGE_PALETTE) and settings_otherModes.cycleType(1);
@@ -705,6 +717,8 @@ begin
             stage_cvgFB(STAGE_BLENDER)    <= stage_cvgFB(STAGE_COMBINER);  
             stage_FBData9(STAGE_BLENDER)  <= stage_FBData9(STAGE_COMBINER);
             stage_FBData9Z(STAGE_BLENDER) <= stage_FBData9Z(STAGE_COMBINER);
+            stage_ditherC(STAGE_BLENDER)  <= stage_ditherC(STAGE_COMBINER);
+            stage_ditherA(STAGE_BLENDER)  <= stage_ditherA(STAGE_COMBINER);
             stage_blendEna(STAGE_BLENDER) <= blend_enable;        
             
             -- synthesis translate_off
@@ -746,6 +760,8 @@ begin
             -- ##################################################
             -- ######### STAGE_OUTPUT ###########################
             -- ##################################################
+            stage_ditherC(STAGE_OUTPUT)  <= stage_ditherC(STAGE_BLENDER);
+            
             writePixel        <= stage_valid(STAGE_OUTPUT - 1) and zUsePixel and (not settings_otherModes.cycleType(1));
             writePixelAddr    <= stage_addr(STAGE_OUTPUT - 1);
             writePixelX       <= stage_x(STAGE_OUTPUT - 1);
@@ -816,7 +832,7 @@ begin
             export_LOD.addr         <= (others => '0');
             export_LOD.data         <= (others => '0');
             export_LOD.x            <= resize(settings_poly.tile, 16);
-            export_LOD.y            <= resize(settings_poly.tile + 1, 16);
+            export_LOD.y            <= (others => '0'); --resize(settings_poly.tile + 1, 16);
             export_LOD.debug1       <= x"000000FF";
             export_LOD.debug2       <= (others => '0');
             export_LOD.debug3       <= (others => '0');            
@@ -965,8 +981,8 @@ begin
                
             export_Comb.addr        <= resize(stage_combineC(STAGE_OUTPUT - 1)(3), 32);
             export_Comb.data        <= (others => '0');
-            export_Comb.x           <= (others => '0');
-            export_Comb.y           <= (others => '0');
+            export_Comb.x           <= 13x"0" & stage_ditherC(STAGE_OUTPUT - 1);
+            export_Comb.y           <= 13x"0" & stage_ditherA(STAGE_OUTPUT - 1);
             export_Comb.debug1      <= resize(stage_combineC(STAGE_OUTPUT - 1)(0), 32);
             export_Comb.debug2      <= resize(stage_combineC(STAGE_OUTPUT - 1)(1), 32);
             export_Comb.debug3      <= resize(stage_combineC(STAGE_OUTPUT - 1)(2), 32);            
@@ -1155,6 +1171,22 @@ begin
       tex_copy             => texture_copy
    );
 
+   -- STAGE_PALETTE
+   iRDP_DitherFetch : entity work.RDP_DitherFetch
+   port map
+   (
+      clk1x                => clk1x,     
+      trigger              => pipeIn_trigger,  
+      
+      settings_otherModes  => settings_otherModes,
+      
+      X_in                 => stage_x(STAGE_TEXREAD),
+      Y_in                 => stage_y(STAGE_TEXREAD),
+                                         
+      ditherColor          => ditherColor,
+      ditherAlpha          => ditherAlpha
+   );
+
    -- STAGE_COMBINER
    iRDP_CombineColor : entity work.RDP_CombineColor
    port map
@@ -1268,6 +1300,17 @@ begin
       blend_divEna            => blend_divEna,
       blend_divVal            => blend_divVal,
       blender_color           => blender_color
+   );
+   
+   -- STAGE_OUTPUT
+   iRDP_DitherCalc : entity work.RDP_DitherCalc
+   port map
+   (
+      DISABLEDITHER        => DISABLEDITHER,
+      settings_otherModes  => settings_otherModes,
+      ditherColor          => stage_ditherC(STAGE_OUTPUT),
+      color_in             => writePixelColor,
+      color_out            => writePixelColorOut
    );
 
 end architecture;

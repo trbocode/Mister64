@@ -68,10 +68,12 @@ src/tb/cpu_mul.vhd ^
 ../../rtl/RDP_TexSingle.vhd ^
 ../../rtl/RDP_TexFetch.vhd ^
 ../../rtl/RDP_FBread.vhd ^
+../../rtl/RDP_DitherFetch.vhd ^
 ../../rtl/RDP_CombineColor.vhd ^
 ../../rtl/RDP_CombineAlpha.vhd ^
 ../../rtl/RDP_BlendColor.vhd ^
 ../../rtl/RDP_Zbuffer.vhd ^
+../../rtl/RDP_DitherCalc.vhd ^
 ../../rtl/RDP_pipeline.vhd ^
 ../../rtl/RDP.vhd ^
 ../../rtl/DDR3Mux.vhd ^

@@ -22,6 +22,7 @@ entity RDP is
       error_drawMode       : out std_logic; 
       
       DISABLEFILTER        : in  std_logic;
+      DISABLEDITHER        : in  std_logic;
       write9               : in  std_logic;
       read9                : in  std_logic;
       wait9                : in  std_logic;
@@ -567,7 +568,7 @@ begin
 
                   end case;
                   
-               elsif ((DPC_STATUS_dma_busy = '1' and DPC_CURRENT = DPC_END) or commandAbort = '1') then
+               elsif ((DPC_STATUS_dma_busy = '1' and DPC_CURRENT >= DPC_END) or commandAbort = '1') then
                
                   if (DPC_STATUS_end_pending = '1') then
                      DPC_STATUS_start_pending <= '0';
@@ -1180,6 +1181,7 @@ begin
       reset                   => reset,   
       
       DISABLEFILTER           => DISABLEFILTER,
+      DISABLEDITHER           => DISABLEDITHER,
 
       errorCombine            => errorCombine,
       error_combineAlpha      => error_combineAlpha,
@@ -1276,7 +1278,7 @@ begin
       writePixelAddr          => writePixelAddr,    
       writePixelX             => writePixelX,    
       writePixelY             => writePixelY,   
-      writePixelColor         => writePixelColor,
+      writePixelColorOut      => writePixelColor,
       writePixelCvg           => writePixelCvg,
       writePixelFBData9       => writePixelFBData9,
       

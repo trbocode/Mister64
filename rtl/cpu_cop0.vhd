@@ -310,8 +310,8 @@ begin
             COP0_13_CAUSE_exceptionCode     <= (others => '0'); 
             COP0_13_CAUSE_interruptPending  <= (others => '0'); 
             COP0_13_CAUSE_coprocessorError  <= (others => '0'); 
-            COP0_13_CAUSE_branchDelay       <= '0';
-            COP0_14_EPC                     <= (others => '0'); 
+            COP0_13_CAUSE_branchDelay       <= ss_in(13)(31);          -- '0'
+            COP0_14_EPC                     <= 32x"0" & ss_in(14)(31 downto 0); -- (others => '0'); will not work for savestates with TLB
             COP0_16_CONFIG_cacheAlgoKSEG0   <= (others => '0'); 
             COP0_16_CONFIG_cu               <= (others => '0'); 
             COP0_16_CONFIG_bigEndian        <= '1';

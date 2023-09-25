@@ -22,6 +22,7 @@ entity pif is
       PADTYPE1             : in  std_logic_vector(1 downto 0);
       PADTYPE2             : in  std_logic_vector(1 downto 0);
       PADTYPE3             : in  std_logic_vector(1 downto 0);
+      PADDPADSWAP          : in  std_logic;
       CPAKFORMAT           : in  std_logic;
       
       error                : out std_logic := '0';
@@ -220,6 +221,24 @@ architecture arch of pif is
    
    signal PADTYPE                   : std_logic_vector(1 downto 0);
    
+   signal pad_muxed_A               : std_logic;
+   signal pad_muxed_B               : std_logic;
+   signal pad_muxed_C               : std_logic;
+   signal pad_muxed_START           : std_logic;
+   signal pad_muxed_DPAD_UP         : std_logic;
+   signal pad_muxed_DPAD_DOWN       : std_logic;
+   signal pad_muxed_DPAD_LEFT       : std_logic;
+   signal pad_muxed_DPAD_RIGHT      : std_logic;
+   signal pad_muxed_L               : std_logic;
+   signal pad_muxed_R               : std_logic;
+   signal pad_muxed_C_UP            : std_logic;
+   signal pad_muxed_C_DOWN          : std_logic;
+   signal pad_muxed_C_LEFT          : std_logic;
+   signal pad_muxed_C_RIGHT         : std_logic;
+                                   
+   signal pad_muxed_analogH         : std_logic_vector(7 downto 0);
+   signal pad_muxed_analogV         : std_logic_vector(7 downto 0);
+   
    -- PIFRAM
    signal pifram_wren               : std_logic := '0';
    signal pifram_busdata            : std_logic_vector(31 downto 0) := (others => '0');
@@ -348,6 +367,31 @@ begin
               PADTYPE2 when (EXT_channel(1 downto 0) = "10") else 
               PADTYPE3;
               
+   pad_muxed_A          <= pad_A(to_integer(EXT_channel(1 downto 0)));         
+   pad_muxed_B          <= pad_B(to_integer(EXT_channel(1 downto 0)));         
+   pad_muxed_C          <= pad_Z(to_integer(EXT_channel(1 downto 0)));         
+   pad_muxed_START      <= pad_START(to_integer(EXT_channel(1 downto 0)));     
+   pad_muxed_DPAD_UP    <= pad_DPAD_UP(to_integer(EXT_channel(1 downto 0)));   
+   pad_muxed_DPAD_DOWN  <= pad_DPAD_DOWN(to_integer(EXT_channel(1 downto 0))); 
+   pad_muxed_DPAD_LEFT  <= pad_DPAD_LEFT(to_integer(EXT_channel(1 downto 0))); 
+   pad_muxed_DPAD_RIGHT <= pad_DPAD_RIGHT(to_integer(EXT_channel(1 downto 0)));
+   pad_muxed_L          <= pad_L(to_integer(EXT_channel(1 downto 0)));      
+   pad_muxed_R          <= pad_R(to_integer(EXT_channel(1 downto 0)));      
+   pad_muxed_C_UP       <= pad_C_UP(to_integer(EXT_channel(1 downto 0)));   
+   pad_muxed_C_DOWN     <= pad_C_DOWN(to_integer(EXT_channel(1 downto 0))); 
+   pad_muxed_C_LEFT     <= pad_C_LEFT(to_integer(EXT_channel(1 downto 0))); 
+   pad_muxed_C_RIGHT    <= pad_C_RIGHT(to_integer(EXT_channel(1 downto 0)));
+   
+   process (all)
+   begin
+      case (EXT_channel(1 downto 0)) is
+         when "00"   => pad_muxed_analogH <= pad_0_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_0_analog_v));
+         when "01"   => pad_muxed_analogH <= pad_1_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_1_analog_v));
+         when "10"   => pad_muxed_analogH <= pad_2_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_2_analog_v));
+         when others => pad_muxed_analogH <= pad_3_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_3_analog_v));
+      end case;   
+   end process;
+                    
    sdram_burstcount <= x"01";
               
    process (clk1x)
@@ -767,29 +811,49 @@ begin
                   if (EXT_receive > 4) then
                      EXT_over         <= '1';
                   end if;
-                  EXT_responsedata(0)(7) <= pad_A(to_integer(EXT_channel(1 downto 0)));         
-                  EXT_responsedata(0)(6) <= pad_B(to_integer(EXT_channel(1 downto 0)));         
-                  EXT_responsedata(0)(5) <= pad_Z(to_integer(EXT_channel(1 downto 0)));         
-                  EXT_responsedata(0)(4) <= pad_START(to_integer(EXT_channel(1 downto 0)));     
-                  EXT_responsedata(0)(3) <= pad_DPAD_UP(to_integer(EXT_channel(1 downto 0)));   
-                  EXT_responsedata(0)(2) <= pad_DPAD_DOWN(to_integer(EXT_channel(1 downto 0))); 
-                  EXT_responsedata(0)(1) <= pad_DPAD_LEFT(to_integer(EXT_channel(1 downto 0))); 
-                  EXT_responsedata(0)(0) <= pad_DPAD_RIGHT(to_integer(EXT_channel(1 downto 0)));
+                  
+                  EXT_responsedata(0)(7) <= pad_muxed_A;         
+                  EXT_responsedata(0)(6) <= pad_muxed_B;         
+                  EXT_responsedata(0)(5) <= pad_muxed_C;         
+                  EXT_responsedata(0)(4) <= pad_muxed_START;     
+                  EXT_responsedata(0)(3) <= pad_muxed_DPAD_UP;   
+                  EXT_responsedata(0)(2) <= pad_muxed_DPAD_DOWN; 
+                  EXT_responsedata(0)(1) <= pad_muxed_DPAD_LEFT; 
+                  EXT_responsedata(0)(0) <= pad_muxed_DPAD_RIGHT;
                   
                   EXT_responsedata(1)(7 downto 6) <= "00";      
-                  EXT_responsedata(1)(5) <= pad_L(to_integer(EXT_channel(1 downto 0)));      
-                  EXT_responsedata(1)(4) <= pad_R(to_integer(EXT_channel(1 downto 0)));      
-                  EXT_responsedata(1)(3) <= pad_C_UP(to_integer(EXT_channel(1 downto 0)));   
-                  EXT_responsedata(1)(2) <= pad_C_DOWN(to_integer(EXT_channel(1 downto 0))); 
-                  EXT_responsedata(1)(1) <= pad_C_LEFT(to_integer(EXT_channel(1 downto 0))); 
-                  EXT_responsedata(1)(0) <= pad_C_RIGHT(to_integer(EXT_channel(1 downto 0)));
+                  EXT_responsedata(1)(5) <= pad_muxed_L;      
+                  EXT_responsedata(1)(4) <= pad_muxed_R;      
+                  EXT_responsedata(1)(3) <= pad_muxed_C_UP;   
+                  EXT_responsedata(1)(2) <= pad_muxed_C_DOWN; 
+                  EXT_responsedata(1)(1) <= pad_muxed_C_LEFT; 
+                  EXT_responsedata(1)(0) <= pad_muxed_C_RIGHT;
                   
-                  case (EXT_channel(1 downto 0)) is
-                     when "00"   => EXT_responsedata(2) <= pad_0_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_0_analog_v));
-                     when "01"   => EXT_responsedata(2) <= pad_1_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_1_analog_v));
-                     when "10"   => EXT_responsedata(2) <= pad_2_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_2_analog_v));
-                     when others => EXT_responsedata(2) <= pad_3_analog_h; EXT_responsedata(3) <= std_logic_vector(-signed(pad_3_analog_v));
-                  end case;
+                  EXT_responsedata(2) <= pad_muxed_analogH;
+                  EXT_responsedata(3) <= pad_muxed_analogV;
+                  
+                  if (PADDPADSWAP = '1') then
+                     if    (pad_muxed_DPAD_LEFT  = '1' and pad_muxed_DPAD_UP = '0' and pad_muxed_DPAD_DOWN = '0') then EXT_responsedata(2) <= std_logic_vector(to_signed(-85,8));
+                     elsif (pad_muxed_DPAD_RIGHT = '1' and pad_muxed_DPAD_UP = '0' and pad_muxed_DPAD_DOWN = '0') then EXT_responsedata(2) <= std_logic_vector(to_signed(85,8));
+                     elsif (pad_muxed_DPAD_LEFT  = '1')                                                           then EXT_responsedata(2) <= std_logic_vector(to_signed(-69,8));
+                     elsif (pad_muxed_DPAD_RIGHT = '1')                                                           then EXT_responsedata(2) <= std_logic_vector(to_signed(69,8));
+                     else EXT_responsedata(2) <= (others => '0'); end if;
+                     
+                     if    (pad_muxed_DPAD_UP   = '1' and pad_muxed_DPAD_LEFT = '0' and pad_muxed_DPAD_RIGHT = '0') then EXT_responsedata(3) <= std_logic_vector(to_signed(85,8));
+                     elsif (pad_muxed_DPAD_DOWN = '1' and pad_muxed_DPAD_LEFT = '0' and pad_muxed_DPAD_RIGHT = '0') then EXT_responsedata(3) <= std_logic_vector(to_signed(-85,8));
+                     elsif (pad_muxed_DPAD_UP   = '1')                                                              then EXT_responsedata(3) <= std_logic_vector(to_signed(69,8));
+                     elsif (pad_muxed_DPAD_DOWN = '1')                                                              then EXT_responsedata(3) <= std_logic_vector(to_signed(-69,8));
+                     else EXT_responsedata(3) <= (others => '0'); end if;
+                     
+                     EXT_responsedata(0)(3) <= '0';
+                     EXT_responsedata(0)(2) <= '0';
+                     EXT_responsedata(0)(1) <= '0';
+                     EXT_responsedata(0)(0) <= '0';
+                     if (signed(pad_muxed_analogH) >=  64) then EXT_responsedata(0)(0) <= '1'; end if;
+                     if (signed(pad_muxed_analogH) <= -64) then EXT_responsedata(0)(1) <= '1'; end if;
+                     if (signed(pad_muxed_analogV) >=  64) then EXT_responsedata(0)(3) <= '1'; end if;
+                     if (signed(pad_muxed_analogV) <= -64) then EXT_responsedata(0)(2) <= '1'; end if;
+                  end if;
                   
                -- reponses for PAK
                when EXTCOMM_PAK_READADDR1 =>

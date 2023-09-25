@@ -34,6 +34,7 @@ entity n64top is
       DATACACHEFORCEWEB       : in  std_logic; 
       DDR3SLOW                : in  std_logic_vector(3 downto 0);
       DISABLEFILTER           : in  std_logic;       
+      DISABLEDITHER           : in  std_logic;       
       
       write9                  : in  std_logic;
       read9                   : in  std_logic;
@@ -80,6 +81,7 @@ entity n64top is
       PADTYPE1                : in  std_logic_vector(1 downto 0);
       PADTYPE2                : in  std_logic_vector(1 downto 0);
       PADTYPE3                : in  std_logic_vector(1 downto 0);
+      PADDPADSWAP             : in  std_logic;
       rumble                  : out std_logic_vector(3 downto 0);
       pad_A                   : in  std_logic_vector(3 downto 0);
       pad_B                   : in  std_logic_vector(3 downto 0);
@@ -569,6 +571,7 @@ begin
       error_drawMode       => errorRDP_drawMode,
       
       DISABLEFILTER        => DISABLEFILTER,
+      DISABLEDITHER        => DISABLEDITHER,
       write9               => write9,
       read9                => read9,
       wait9                => wait9,
@@ -912,6 +915,7 @@ begin
       PADTYPE1             => PADTYPE1,
       PADTYPE2             => PADTYPE2,
       PADTYPE3             => PADTYPE3,
+      PADDPADSWAP          => PADDPADSWAP,
       CPAKFORMAT           => CPAKFORMAT,
       
       error                => error_pif,

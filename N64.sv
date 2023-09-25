@@ -242,12 +242,15 @@ parameter CONF_STR = {
 	//"RH,Save state (Alt-F1);",
 	//"RI,Restore state (F1);",
 	"-;",
+   //"O[59:58],Gamepads,1,2,3,4;",
    "O[51:50],Pad 1 Pak,None,CPAK,Rumble;",
    "O[53:52],Pad 2 Pak,None,CPAK,Rumble;",
    "O[55:54],Pad 3 Pak,None,CPAK,Rumble;",
    "O[57:56],Pad 4 Pak,None,CPAK,Rumble;",
+   "O[60],Swap Analog<->DPAD,Off,On;",
 	"-;",
    "O[30],Texture Filter,On,Off;",
+   "O[31],Dithering,On,Off;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
    "O[8:7],Stereo Mix,None,25%,50%,100%;",
@@ -283,7 +286,7 @@ parameter CONF_STR = {
    "-;",
    
 	"R0,Reset;",
-   "J1,A,B,Start,L,R,Z,C Up,C Right,C Down,C Left,Savestates;",
+   "J1,A,B,Start,L,R,Z,C Up,C Right,C Down,C Left;",
 	"jn,A,B,Start,L,R,Z,C Up,C Right,C Down,C Left;",
 	"I,",
 	"Load=DPAD Up|Save=Down|Slot=L+R,",
@@ -404,7 +407,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
    .direct_video(DIRECT_VIDEO)
 );
 
-assign joy = joy_unmod[14] ? 20'b0 : joy_unmod;
+assign joy = joy_unmod; //joy_unmod[14] ? 20'b0 : joy_unmod;
 
 ////////////////////////////  PIFROM download  ///////////////////////////////////
 
@@ -519,7 +522,8 @@ savestate_ui savestate_ui
 	.clk            (clk_1x        ),
 	.ps2_key        (ps2_key[10:0] ),
 	.allow_ss       (cart_loaded   ),
-	.joySS          (joy_unmod[14] ),
+	//.joySS          (joy_unmod[14] ),
+	.joySS          (0             ),
 	.joyRight       (joy_unmod[0]  ),
 	.joyLeft        (joy_unmod[1]  ),
 	.joyDown        (joy_unmod[2]  ),
@@ -600,6 +604,7 @@ n64top
    .DATACACHEFORCEWEB(status[29]),
    .DDR3SLOW(status[23:20]),
    .DISABLEFILTER(status[30]),
+   .DISABLEDITHER(status[31]),
    
    .write9(!status[11]), 
    .read9(!status[12]),  
@@ -641,11 +646,12 @@ n64top
    .sdram_dataRead   (sdram_dataRead ),
       
    // pad
-   .PADCOUNT         (3'd3),
+   .PADCOUNT         (3'd3),//(status[59:58]),
    .PADTYPE0         (status[51:50]),
    .PADTYPE1         (status[53:52]),
    .PADTYPE2         (status[55:54]),
    .PADTYPE3         (status[57:56]),
+   .PADDPADSWAP      (status[60]),
    .rumble           (rumble),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),
