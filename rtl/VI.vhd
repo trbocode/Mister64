@@ -7,7 +7,8 @@ library mem;
 entity VI is
    generic
    (
-      use2Xclock           : in  std_logic
+      use2Xclock       : in  std_logic;
+      VITEST           : in  std_logic := '0'
    );
    port 
    (
@@ -23,6 +24,7 @@ entity VI is
       
       ISPAL            : in  std_logic;
       CROPBOTTOM       : in  unsigned(1 downto 0);
+      VI_BILINEAROFF   : in  std_logic;
       
       errorEna         : in  std_logic;
       errorCode        : in  unsigned(23 downto 0);
@@ -307,7 +309,8 @@ begin
    iVI_videoout : entity work.VI_videoout
    generic map
    (
-      use2Xclock       => use2Xclock
+      use2Xclock       => use2Xclock,
+      VITEST           => VITEST
    )
    port map
    (
@@ -319,6 +322,7 @@ begin
 
       ISPAL                => ISPAL,        
       CROPBOTTOM           => CROPBOTTOM,
+      VI_BILINEAROFF       => VI_BILINEAROFF,
   
       errorEna             => errorEna, 
       errorCode            => errorCode,
@@ -331,10 +335,13 @@ begin
       VI_ORIGIN            => VI_ORIGIN,   
       VI_WIDTH             => VI_WIDTH,  
       VI_X_SCALE_FACTOR    => VI_X_SCALE_FACTOR,
+      VI_X_SCALE_OFFSET    => VI_X_SCALE_OFFSET,
       VI_Y_SCALE_FACTOR    => VI_Y_SCALE_FACTOR,
       VI_Y_SCALE_OFFSET    => VI_Y_SCALE_OFFSET,
       VI_V_VIDEO_START     => VI_V_VIDEO_START,
       VI_V_VIDEO_END       => VI_V_VIDEO_END,  
+      VI_H_VIDEO_START     => VI_H_VIDEO_START,
+      VI_H_VIDEO_END       => VI_H_VIDEO_END,  
       
       newLine              => newLine,
       VI_CURRENT           => VI_CURRENT,

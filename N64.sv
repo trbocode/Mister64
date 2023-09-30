@@ -251,6 +251,8 @@ parameter CONF_STR = {
 	"-;",
    "O[30],Texture Filter,On,Off;",
    "O[31],Dithering,On,Off;",
+   "O[32],VI Bilinear,On,Off;",
+   "-;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
    "O[8:7],Stereo Mix,None,25%,50%,100%;",
@@ -597,6 +599,8 @@ n64top
    
    .ISPAL(status[79]),
    .CROPBOTTOM(status[45:44]),
+   .VI_BILINEAROFF(status[32]),
+   
    .CICTYPE(status[68:65]),
    .RAMSIZE8(~status[70]),
    .DATACACHEON(~status[43]),

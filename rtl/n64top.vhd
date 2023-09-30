@@ -26,6 +26,7 @@ entity n64top is
       
       ISPAL                   : in  std_logic;
       CROPBOTTOM              : in  unsigned(1 downto 0);
+      VI_BILINEAROFF          : in  std_logic;
       
       CICTYPE                 : in  std_logic_vector(3 downto 0);
       RAMSIZE8                : in  std_logic;
@@ -713,6 +714,7 @@ begin
       
       ISPAL                => ISPAL,
       CROPBOTTOM           => CROPBOTTOM,
+      VI_BILINEAROFF       => VI_BILINEAROFF,
       
       errorEna             => errorEna, 
       errorCode            => errorCode,
@@ -1057,6 +1059,8 @@ begin
       rdpfifoZ_nearfull=> rdpfifoZ_nearfull,
       rdpfifoZ_empty   => rdpfifoZ_empty
    );
+   
+   sdramMux_request(SDRAMMUX_VI) <= '0';
    
    iSDRamMux : entity work.SDRamMux
    port map

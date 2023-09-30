@@ -8,7 +8,8 @@ use work.pVI.all;
 entity VI_videoout is
    generic
    (
-      use2Xclock           : in  std_logic
+      use2Xclock           : in  std_logic;
+      VITEST               : in  std_logic
    );
    port 
    (
@@ -20,6 +21,7 @@ entity VI_videoout is
       
       ISPAL                : in  std_logic;
       CROPBOTTOM           : in  unsigned(1 downto 0);
+      VI_BILINEAROFF       : in  std_logic;
       
       errorEna             : in  std_logic;
       errorCode            : in  unsigned(23 downto 0);
@@ -32,10 +34,13 @@ entity VI_videoout is
       VI_ORIGIN            : in unsigned(23 downto 0);
       VI_WIDTH             : in unsigned(11 downto 0);
       VI_X_SCALE_FACTOR    : in unsigned(11 downto 0);
+      VI_X_SCALE_OFFSET    : in unsigned(11 downto 0);
       VI_Y_SCALE_FACTOR    : in unsigned(11 downto 0);
       VI_Y_SCALE_OFFSET    : in unsigned(11 downto 0);
       VI_V_VIDEO_START     : in unsigned(9 downto 0);
       VI_V_VIDEO_END       : in unsigned(9 downto 0);
+      VI_H_VIDEO_START     : in unsigned(9 downto 0);
+      VI_H_VIDEO_END       : in unsigned(9 downto 0);
       
       newLine              : out std_logic;
       VI_CURRENT           : out unsigned(9 downto 0);
@@ -93,29 +98,49 @@ architecture arch of VI_videoout is
    signal videoout_out            : tvideoout_out; 
    signal videoout_request        : tvideoout_request;  
 
-   -- data fetch
-   signal videoout_readAddr       : unsigned(11 downto 0);
-   signal videoout_pixelRead      : std_logic_vector(15 downto 0);
+   -- processing
+   signal rdram_storeAddr     : unsigned(10 downto 0) := (others => '0');
+   signal rdram_store         : std_logic := '0';
    
-   signal lineScaled              : unsigned(20 downto 0);
+   signal doubleProc          : std_logic; 
+   signal startProc           : std_logic; 
+   signal startOut            : std_logic; 
+   signal fracYout            : unsigned(4 downto 0);
    
-   signal rdram_address_calc      : unsigned(23 downto 0):= (others => '0');
-   signal rdram_burstcount_calc   : unsigned(8 downto 0):= (others => '0'); 
+   signal fetchAddr           : unsigned(11 downto 0);
+   signal fetchdata           : std_logic_vector(31 downto 0);
+                              
+   signal proc_pixel          : std_logic;
+   signal proc_border         : std_logic;
+   signal proc_x              : unsigned(9 downto 0);        
+   signal proc_y              : unsigned(9 downto 0);
+   signal proc_pixel_Mid      : tfetchelement;
+   signal proc_pixels_AA      : tfetcharray_AA;
+   signal proc_pixels_DD      : tfetcharray_DD;
+
+   signal filter_pixel        : std_logic;
+   signal filter_x_out        : unsigned(9 downto 0);        
+   signal filter_y_out        : unsigned(9 downto 0);
+   signal filter_color        : tfetchelement;
+
+   signal filterram_addr_A    : std_logic_vector(10 downto 0);
+   signal filterram_addr_B    : std_logic_vector(10 downto 0);
+   signal filterram_di_A      : std_logic_vector(23 downto 0);
+   signal filterram_do_B      : std_logic_vector(23 downto 0);
    
-   type tState is
-   (
-      WAITNEWLINE,
-      WAITREQUEST,
-      WAITGRANT,
-      WAITREAD
-   );
-   signal state : tState := WAITNEWLINE;
+   signal filterAddr          : unsigned(10 downto 0);
+      
+   signal out_pixel           : std_logic;
+   signal out_x               : unsigned(9 downto 0);        
+   signal out_y               : unsigned(9 downto 0);
+   signal out_color           : unsigned(23 downto 0);
    
-   signal waitcnt             : integer range 0 to 3;
+   signal outram_addr_A       : std_logic_vector(10 downto 0);
+   signal outram_addr_B       : std_logic_vector(10 downto 0);
+   signal outram_di_A         : std_logic_vector(23 downto 0);
+   signal outram_do_B         : std_logic_vector(23 downto 0);
    
-   signal lineAct             : unsigned(8 downto 0) := (others => '0');
-   signal fillAddr            : unsigned(9 downto 0) := (others => '0');
-   signal store               : std_logic := '0';
+   signal videoout_readAddr   : unsigned(10 downto 0);
 
    -- overlay
    signal overlay_data        : std_logic_vector(23 downto 0);
@@ -150,9 +175,192 @@ begin
    videoout_settings.cropBottom     <= CROPBOTTOM;
    
    newLine    <= videoout_reports.newLine;
-   VI_CURRENT <= videoout_reports.VI_CURRENT & '0'; -- todo: need to find when interlace sets bit 0, can't be instant, otherwise Kroms CPU tests would hang in infinite loop 
+   VI_CURRENT <= videoout_reports.VI_CURRENT & '0'; -- todo: need to find when interlace sets bit 0, can't be instant, otherwise Kroms CPU tests would hang in infinite loop  
    
-   igpu_videoout_sync : entity work.gpu_videoout_sync
+   iVI_linefetch : entity work.VI_linefetch
+   port map
+   (
+      clk1x              => clk1x,              
+      clk2x              => clk2x,              
+      reset              => reset_1x,           
+                                        
+      VI_CTRL_TYPE       => VI_CTRL_TYPE,     
+      VI_CTRL_SERRATE    => VI_CTRL_SERRATE,  
+      VI_ORIGIN          => VI_ORIGIN,        
+      VI_WIDTH           => VI_WIDTH,         
+      VI_X_SCALE_FACTOR  => VI_X_SCALE_FACTOR,
+      VI_Y_SCALE_FACTOR  => VI_Y_SCALE_FACTOR,
+      VI_Y_SCALE_OFFSET  => VI_Y_SCALE_OFFSET,
+                        
+      newFrame           => videoout_reports.newFrame,
+      lineNr             => videoout_request.lineInNext,
+      fetch              => videoout_request.fetch,
+      
+      doubleProc         => doubleProc,
+      startProc          => startProc,
+      startOut           => startOut,
+      fracYout           => fracYout,
+      
+      rdram_request      => rdram_request,   
+      rdram_rnw          => rdram_rnw,       
+      rdram_address      => rdram_address,   
+      rdram_burstcount   => rdram_burstcount,
+      rdram_granted      => rdram_granted,   
+      rdram_done         => rdram_done,      
+      ddr3_DOUT_READY    => ddr3_DOUT_READY, 
+      rdram_store        => rdram_store,     
+      rdram_storeAddr    => rdram_storeAddr
+   );
+   
+   ilineram: entity mem.dpram_dif
+   generic map 
+   ( 
+      addr_width_a  => 11,
+      data_width_a  => 64,
+      addr_width_b  => 12,
+      data_width_b  => 32
+   )
+   port map
+   (
+      clock_a     => clk2x,
+      address_a   => std_logic_vector(rdram_storeAddr),
+      data_a      => ddr3_DOUT,
+      wren_a      => (ddr3_DOUT_READY and rdram_store),
+      
+      clock_b     => clk1x,
+      address_b   => std_logic_vector(fetchAddr),
+      data_b      => 32x"0",
+      wren_b      => '0',
+      q_b         => fetchdata
+   );   
+   
+   iVI_lineProcess : entity work.VI_lineProcess
+   port map
+   (
+      clk1x              => clk1x,         
+      reset              => reset_1x,         
+                         
+      VI_CTRL_TYPE       => VI_CTRL_TYPE,  
+      VI_WIDTH           => VI_WIDTH,      
+                         
+      newFrame           => videoout_reports.newFrame,      
+      doubleProc         => doubleProc,     
+      startProc          => startProc,     
+                         
+      fetchAddr          => fetchAddr,     
+      fetchdata          => unsigned(fetchdata),     
+                         
+      proc_pixel         => proc_pixel,    
+      proc_border        => proc_border,    
+      proc_x             => proc_x,              
+      proc_y             => proc_y,        
+      proc_pixel_Mid     => proc_pixel_Mid,
+      proc_pixels_AA     => proc_pixels_AA,
+      proc_pixels_DD     => proc_pixels_DD
+   );
+   
+   iVI_filter: entity work.VI_filter
+   port map
+   (
+      clk1x             => clk1x, 
+      reset             => reset_1x,
+                    
+      proc_pixel        => proc_pixel,    
+      proc_border       => proc_border,    
+      proc_x            => proc_x,         
+      proc_y            => proc_y,        
+      proc_pixel_Mid    => proc_pixel_Mid,
+      proc_pixels_AA    => proc_pixels_AA,
+      proc_pixels_DD    => proc_pixels_DD,
+         
+      filter_pixel      => filter_pixel,
+      filter_x_out      => filter_x_out, 
+      filter_y_out      => filter_y_out, 
+      filter_color      => filter_color
+   );
+   
+   filterram_addr_A <= filter_y_out(0) & std_logic_vector(filter_x_out);
+   filterram_di_A   <= std_logic_vector(filter_color.r) & std_logic_vector(filter_color.g) & std_logic_vector(filter_color.b);
+
+   ifilterRAM: entity mem.dpram
+   generic map 
+   ( 
+      addr_width  => 11,
+      data_width  => 24
+   )
+   port map
+   (
+      clock_a     => clk1x,
+      address_a   => filterram_addr_A,
+      data_a      => filterram_di_A,
+      wren_a      => filter_pixel,
+      
+      clock_b     => clk1x,
+      address_b   => filterram_addr_B,
+      data_b      => 24x"0",
+      wren_b      => '0',
+      q_b         => filterram_do_B
+   );   
+   
+   filterram_addr_B <= std_logic_vector(filterAddr);
+   
+   iVI_outProcess : entity work.VI_outProcess
+   port map
+   (
+      clk1x             => clk1x,           
+      reset             => reset_1x,        
+
+      VI_BILINEAROFF    => VI_BILINEAROFF,
+                        
+      VI_H_VIDEO_START  => VI_H_VIDEO_START,
+      VI_H_VIDEO_END    => VI_H_VIDEO_END,  
+      VI_X_SCALE_FACTOR => VI_X_SCALE_FACTOR,
+      VI_X_SCALE_OFFSET => VI_X_SCALE_OFFSET,
+                        
+      newFrame          => videoout_reports.newFrame,             
+      startOut          => startOut,        
+      fracYout          => fracYout,        
+                        
+      filter_y          => filter_y_out(0),
+      filterAddr        => filterAddr,      
+      filterData        => unsigned(filterram_do_B),      
+                        
+      out_pixel         => out_pixel,       
+      out_x             => out_x,               
+      out_y             => out_y,           
+      out_color         => out_color       
+   );
+   
+   outram_addr_A <= out_y(0) & std_logic_vector(out_x);
+   outram_di_A   <= std_logic_vector(out_color);
+
+   ioutRAM: entity mem.dpram
+   generic map 
+   ( 
+      addr_width  => 11,
+      data_width  => 24
+   )
+   port map
+   (
+      clock_a     => clk1x,
+      address_a   => outram_addr_A,
+      data_a      => outram_di_A,
+      wren_a      => out_pixel,
+      
+      clock_b     => clk1x,
+      address_b   => outram_addr_B,
+      data_b      => 24x"0",
+      wren_b      => '0',
+      q_b         => outram_do_B
+   );   
+   
+   outram_addr_B <= std_logic_vector(videoout_readAddr);
+
+   ivi_videoout_sync : entity work.vi_videoout_sync
+   generic map
+   (
+      VITEST           => VITEST
+   )
    port map
    (
       clk1x                   => clk1x,
@@ -164,7 +372,7 @@ begin
                                                                       
       videoout_request        => videoout_request, 
       videoout_readAddr       => videoout_readAddr,  
-      videoout_pixelRead      => videoout_pixelRead,   
+      videoout_pixelRead      => outram_do_B,   
    
       overlay_data            => overlay_data,
       overlay_ena             => overlay_ena,                     
@@ -173,127 +381,7 @@ begin
 
       SS_VI_CURRENT           => SS_VI_CURRENT,
       SS_nextHCount           => SS_nextHCount
-   );   
-   
-   rdram_rnw <= '1';
-   
-   process (clk1x)
-   begin
-      if rising_edge(clk1x) then
-      
-         if (videoout_out.vblank = '1') then
-            lineScaled <= resize(VI_Y_SCALE_OFFSET & '0', lineScaled'length);
-         elsif (videoout_request.lineInNext /= lineAct and videoout_request.fetch = '1') then  
-            lineScaled <= lineScaled + VI_Y_SCALE_FACTOR;     
-         end if;
-         
-         if (VI_CTRL_TYPE = "10") then
-            rdram_address_calc    <= VI_ORIGIN + to_unsigned(to_integer(lineScaled(lineScaled'left downto 10)) * to_integer(VI_WIDTH) * 2, 24);
-            if (VI_X_SCALE_FACTOR > x"200") then -- hack for 320/640 pixel width
-               rdram_burstcount_calc <= 9x"A0";
-            else
-               rdram_burstcount_calc <= 9x"50";
-            end if;
-         elsif (VI_CTRL_TYPE = "11") then
-            rdram_address_calc    <= VI_ORIGIN + to_unsigned(to_integer(lineScaled(lineScaled'left downto 10)) * to_integer(VI_WIDTH) * 4, 24);
-            if (VI_X_SCALE_FACTOR > x"200") then -- hack for 320/640 pixel width
-               rdram_burstcount_calc <= 9x"140";
-            else
-               rdram_burstcount_calc <= 9x"A0";
-            end if;
-         end if;
-   
-      end if;
-   end process;
-   
-   process (clk2x)
-   begin
-      if rising_edge(clk2x) then
-         
-         rdram_request <= '0';
-         
-         case (state) is
-         
-            when WAITNEWLINE =>
-               if (videoout_request.lineInNext /= lineAct and videoout_request.fetch = '1') then
-                  waitcnt <= 3;
-                  state   <= WAITREQUEST;
-                  if (use2Xclock = '0') then
-                     lineAct  <= videoout_request.lineInNext;
-                     fillAddr <= videoout_request.lineInNext(0) & 9x"000";
-                  end if;
-               end if;
-               
-            when WAITREQUEST => 
-            
-               rdram_address     <= "0000" & rdram_address_calc;
-               rdram_burstcount  <= '0' & rdram_burstcount_calc;
-               
-               if (use2Xclock = '1') then
-                  lineAct  <= videoout_request.lineInNext;
-                  fillAddr <= videoout_request.lineInNext(0) & 9x"000";
-               end if;
-               
-               --if (videoout_settings.GPUSTAT_VerRes = '1') then
-               --   fillAddr(8)  <= videoout_request.lineInNext(1);
-               --end if;
-            
-               if (waitcnt > 0) then
-                  waitcnt <= waitcnt - 1;
-               else
-                  if (VI_CTRL_TYPE = "10") then
-                     state            <= WAITGRANT;
-                     rdram_request    <= '1';
-                  elsif (VI_CTRL_TYPE = "11") then
-                     state            <= WAITGRANT;
-                     rdram_request    <= '1';
-                  else 
-                     state <= WAITNEWLINE;
-                  end if;
-               end if;
-               
-            when WAITGRANT => 
-               if (rdram_granted = '1') then
-                  state <= WAITREAD;
-                  store <= '1';
-               end if;
-            
-            when WAITREAD  => 
-               if (ddr3_DOUT_READY = '1') then
-                  fillAddr <= fillAddr + 1;
-               end if;
-               if (rdram_done = '1') then
-                  store  <= '0';
-                  state <= WAITNEWLINE; 
-               end if;
-         
-         end case;
-         
-      end if;
-   end process; 
-   
-   ilineram: entity mem.dpram_dif
-   generic map 
-   ( 
-      addr_width_a  => 10,
-      data_width_a  => 64,
-      addr_width_b  => 12,
-      data_width_b  => 16
-   )
-   port map
-   (
-      clock_a     => clk2x,
-      address_a   => std_logic_vector(fillAddr),
-      data_a      => ddr3_DOUT,
-      wren_a      => (ddr3_DOUT_READY and store),
-      
-      clock_b     => clk1x,
-      address_b   => std_logic_vector(videoout_readAddr),
-      data_b      => x"0000",
-      wren_b      => '0',
-      q_b(7 downto  0) => videoout_pixelRead(15 downto 8),
-      q_b(15 downto 8) => videoout_pixelRead(7 downto 0)
-   );   
+   );  
    
    -- texts
    fpstext( 7 downto 0) <= resize(fpscountBCD(3 downto 0), 8) + 16#30#;

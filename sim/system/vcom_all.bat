@@ -53,6 +53,10 @@ src/tb/cpu_mul.vhd ^
 ../../rtl/VI_package.vhd ^
 ../../rtl/VI_overlay.vhd ^
 ../../rtl/VI_videoout_sync.vhd ^
+../../rtl/VI_linefetch.vhd ^
+../../rtl/VI_lineProcess.vhd ^
+../../rtl/VI_filter.vhd ^
+../../rtl/VI_outProcess.vhd ^
 ../../rtl/VI_videoout.vhd ^
 ../../rtl/VI.vhd ^
 ../../rtl/AI.vhd ^

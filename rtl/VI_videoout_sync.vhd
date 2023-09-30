@@ -1,11 +1,17 @@
 library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
+use STD.textio.all;
 
 library mem;
 use work.pVI.all;
+use work.pFunctions.all;
 
-entity gpu_videoout_sync is
+entity vi_videoout_sync is
+   generic
+   (
+      VITEST               : in  std_logic
+   );
    port 
    (
       clk1x                   : in  std_logic;
@@ -17,8 +23,8 @@ entity gpu_videoout_sync is
 
       videoout_request        : out tvideoout_request := ('0', (others => '0'), 0, (others => '0'));
       
-      videoout_readAddr       : out unsigned(11 downto 0) := (others => '0');
-      videoout_pixelRead      : in  std_logic_vector(15 downto 0);
+      videoout_readAddr       : out unsigned(10 downto 0) := (others => '0');
+      videoout_pixelRead      : in  std_logic_vector(23 downto 0);
       
       overlay_data            : in  std_logic_vector(23 downto 0);
       overlay_ena             : in  std_logic;
@@ -30,10 +36,11 @@ entity gpu_videoout_sync is
    );
 end entity;
 
-architecture arch of gpu_videoout_sync is
+architecture arch of vi_videoout_sync is
    
    -- timing
    signal lineIn           : unsigned(8 downto 0) := (others => '0');
+   signal lineInNew        : std_logic := '0';
    signal nextHCount       : integer range 0 to 4095;
    signal vpos             : integer range 0 to 511;
    signal vsyncCount       : integer range 0 to 511;
@@ -55,15 +62,6 @@ architecture arch of gpu_videoout_sync is
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
    
-   type tReadState is
-   (
-      IDLE,
-      READ16,
-      READ32_0,
-      READ32_16
-   );
-   signal readstate     : tReadState := IDLE;
-   
    signal fetchNext : std_logic := '0';
    
 begin 
@@ -77,7 +75,10 @@ begin
    begin
       if rising_edge(clk1x) then
              
-         videoout_reports.newLine <= '0';
+         videoout_reports.newLine  <= '0';
+         videoout_reports.newFrame <= '0';
+         
+         lineInNew <= '0';
              
          videoout_reports.vsync    <= '0';
          if (vsyncCount >= 10 and vsyncCount < 13) then videoout_reports.vsync <= '1'; end if;
@@ -88,7 +89,11 @@ begin
                
             --videoout_reports.interlacedDisplayField   <= videoout_ss_in.interlacedDisplayField;
             nextHCount                                  <= to_integer(SS_nextHCount(11 downto 0));
-            vpos                                        <= to_integer(SS_VI_CURRENT(9 downto 1));
+            if (VITEST = '1') then
+               vpos                                     <= 0;
+            else
+               vpos                                     <= to_integer(SS_VI_CURRENT(9 downto 1));
+            end if;
             --videoout_reports.inVsync                  <= videoout_ss_in.inVsync;
             --videoout_reports.activeLineLSB            <= videoout_ss_in.activeLineLSB;
             --videoout_reports.GPUSTAT_InterlaceField   <= videoout_ss_in.GPUSTAT_InterlaceField;
@@ -124,6 +129,9 @@ begin
                nextHCount <= nextHCount - 1;
                if (nextHCount = 3) then 
                   videoout_reports.newLine <= '1';
+                  if (vpos = vDisplayStart - 3) then
+                    videoout_reports.newFrame <= '1'; 
+                  end if;
                end if;
             else
                
@@ -142,7 +150,8 @@ begin
                   isVsync := '1'; 
                   vsyncCount <= vsyncCount + 1;
                else
-                  lineIn <= to_unsigned(vposNew - vDisplayStart, 9);
+                  lineIn    <= to_unsigned(vposNew - vDisplayStart, 9);
+                  lineInNew <= '1';
                end if;
 
                interlacedDisplayFieldNew := videoout_reports.interlacedDisplayField;
@@ -160,9 +169,11 @@ begin
                videoout_reports.interlacedDisplayField <= interlacedDisplayFieldNew;
                
                vposNew := vposNew + 1;
-               if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
+               if (vposNew >= vDisplayStart and vposNew < vDisplayEnd - 1) then 
                   videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
                   videoout_request.fetch      <= '1';
+               else
+                  videoout_request.lineInNext <= (others => '1');
                end if;
               
             end if;
@@ -192,60 +203,20 @@ begin
    --videoout_out.DisplayWidthReal  <= videoout_out.DisplayWidth; 
    --videoout_out.DisplayHeightReal <= videoout_out.DisplayHeight;
    
+   clkDiv <= 5;
+   xmax <= 640;
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
          
          videoout_out.ce <= '0';
-         
-         --if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-         --   clkDiv  <= 9; videoout_out.hResMode <= "010"; -- 368
-         --else
-         --   case (videoout_settings.GPUSTAT_HorRes1) is
-         --      when "00" => clkDiv <= 12; videoout_out.hResMode <= "100"; -- 256;
-         --      when "01" => clkDiv <= 10; videoout_out.hResMode <= "011"; -- 320;
-         --      when "10" => clkDiv <= 6;  videoout_out.hResMode <= "001"; -- 512;
-         --      when "11" => clkDiv <= 5;  videoout_out.hResMode <= "000"; -- 640;
-         --      when others => null;
-         --   end case;
-         --end if;
-         
-         if (videoout_settings.X_SCALE_FACTOR > x"200") then
-            clkDiv <= 5;
-         else
-            clkDiv <= 10;
-         end if;
-         
-         if (to_integer(videoout_settings.VI_WIDTH(9 downto 0)) < 256) then
-            xmax <= 256;
-         else  
-            xmax <= to_integer(videoout_settings.VI_WIDTH(9 downto 0));
-         end if;
-            
-         --if (videoout_settings.GPUSTAT_HorRes2 = '1') then
-         --   videoout_out.DisplayWidth  <= to_unsigned(368, 11);
-         --else
-         --   case (videoout_settings.GPUSTAT_HorRes1) is
-         --      when "00" => videoout_out.DisplayWidth <= to_unsigned(256, 11);
-         --      when "01" => videoout_out.DisplayWidth <= to_unsigned(320, 11);
-         --      when "10" => videoout_out.DisplayWidth <= to_unsigned(512, 11);
-         --      when "11" => videoout_out.DisplayWidth <= to_unsigned(640, 11);
-         --      when others => null;
-         --   end case;
-         --end if;
-         --   
-         --if (videoout_settings.GPUSTAT_VerRes = '1') then
-         --   videoout_out.DisplayHeight  <= to_unsigned(480, 10);
-         --else
-         --   videoout_out.DisplayHeight  <= to_unsigned(240, 10);
-         --end if;
-         
+
          if (reset = '1') then
          
             clkCnt                     <= 0;
             videoout_out.hblank        <= '1';
             videoout_request.lineDisp  <= (others => '0');
-            readstate                  <= IDLE;
          
          elsif (ce = '1') then
             
@@ -263,7 +234,7 @@ begin
                      videoout_out.r      <= overlay_data( 7 downto 0);
                      videoout_out.g      <= overlay_data(15 downto 8);
                      videoout_out.b      <= overlay_data(23 downto 16);
-                  elsif (videoout_settings.CTRL_TYPE(1) = '0' or videoout_request.xpos >= to_integer(videoout_settings.VI_WIDTH(9 downto 0))) then
+                  elsif (videoout_settings.CTRL_TYPE(1) = '0') then
                      videoout_out.r      <= (others => '0');
                      videoout_out.g      <= (others => '0');
                      videoout_out.b      <= (others => '0');
@@ -281,57 +252,88 @@ begin
                end if;
             end if;
             
-            if (lineIn /= videoout_request.lineDisp) then
+            if (lineInNew = '1') then
                videoout_request.lineDisp <= lineIn;
-               -- must add lower 2 bits of display offset here as fetching from ddr3 vram is done in 64bits = 4 pixel steps
-               -- so if image is shifted in steps below 4, it must be fetched with offset from linebuffer.
-               --videoout_readAddr         <= lineIn(0) & x"00" & videoout_out.DisplayOffsetX(1 downto 0);
-               videoout_readAddr         <= lineIn(0) & 9x"00" & "00";
-               --if (videoout_settings.GPUSTAT_VerRes = '1') then -- interlaced mode
-               --   videoout_readAddr(10) <= lineIn(1);
-               --end if;
-               videoout_request.xpos <= 0;
-               --xmax                  <= to_integer(videoout_out.DisplayWidth);
+               videoout_readAddr         <= lineIn(0) & 10x"00";
+               videoout_request.xpos     <= 0;
             end if;
             
             if (nextHCount = hsync_start) then videoout_out.hsync <= '1'; end if;
             if (nextHCount = hsync_end  ) then videoout_out.hsync <= '0'; end if;
          
-            case (readstate) is
-            
-               when IDLE =>
-                  if (clkCnt >= (clkDiv - 1) and videoout_request.xpos < xmax) then
-                     if (videoout_settings.CTRL_TYPE = "11") then
-                        readstate          <= READ32_0;
-                        videoout_readAddr  <= videoout_readAddr + 1;
-                     else
-                        readstate <= READ16;
-                     end if;
-                  end if;
-
-               when READ16 =>
-                  readstate                  <= IDLE;
-                  videoout_readAddr          <= videoout_readAddr + 1;
-                  pixelData_B                <= videoout_pixelRead( 5 downto  1) & videoout_pixelRead( 5 downto 3);
-                  pixelData_G                <= videoout_pixelRead(10 downto  6) & videoout_pixelRead(10 downto 8);
-                  pixelData_R                <= videoout_pixelRead(15 downto 11) & videoout_pixelRead(15 downto 13);
-                  
-               when READ32_0 =>
-                  readstate                  <= READ32_16;
-                  pixelData_G                <= videoout_pixelRead( 7 downto  0);
-                  pixelData_R                <= videoout_pixelRead(15 downto  8);
-                 
-                when READ32_16 =>
-                  readstate                  <= IDLE;
-                  videoout_readAddr          <= videoout_readAddr + 1;
-                  pixelData_B                <= videoout_pixelRead(15 downto 8);
-            
-            end case;
+            if (clkCnt >= (clkDiv - 1) and videoout_request.xpos < xmax) then
+               pixelData_B                <= videoout_pixelRead( 7 downto  0);
+               pixelData_G                <= videoout_pixelRead(15 downto  8);
+               pixelData_R                <= videoout_pixelRead(23 downto 16);
+               videoout_readAddr          <= videoout_readAddr + 1;
+            end if;
          
          end if;
          
       end if;
-   end process; 
+   end process;
+   
+--##############################################################
+--############################### export
+--##############################################################
+   
+   -- synthesis translate_off
+   goutput : if 1 = 1 generate
+      signal tracecounts4    : integer := 0;
+      signal export_x        : integer := 0;
+      signal export_y        : integer := 0;
+      signal export_hblank_1 : std_logic := '0';
+   begin
+   
+      process
+         file outfile      : text;
+         variable f_status : FILE_OPEN_STATUS;
+         variable line_out : line;
+         variable color32  : unsigned(31 downto 0);          
+      begin
+   
+         file_open(f_status, outfile, "R:\\vi_n64_4_sim.txt", write_mode);
+         file_close(outfile);
+         file_open(f_status, outfile, "R:\\vi_n64_4_sim.txt", append_mode);
+
+         wait for 100 us;
+
+         while (true) loop
+            
+            wait until rising_edge(clk1x);
+            
+            if (videoout_out.vsync = '1') then
+               export_y <= 0;
+            end if;
+            if (videoout_out.hblank = '1') then
+               export_x <= 0;
+            end if;
+            
+            export_hblank_1 <= videoout_out.hblank;
+            if (videoout_out.hblank = '1' and export_hblank_1 = '0') then
+               export_y <= export_y + 1;
+            end if;
+            
+            if (videoout_out.ce = '1' and videoout_out.hblank = '0') then
+               write(line_out, string'(" X ")); 
+               write(line_out, to_string_len(export_x, 5));
+               write(line_out, string'(" Y ")); 
+               write(line_out, to_string_len(export_y, 5));
+               write(line_out, string'(" C "));
+               color32 := 8x"0" & unsigned(videoout_out.r) & unsigned(videoout_out.g) & unsigned(videoout_out.b);
+               write(line_out, to_hstring(color32));
+               writeline(outfile, line_out);
+               tracecounts4 <= tracecounts4 + 1;
+               export_x     <= export_x + 1;
+            end if;
+            
+         end loop;
+         
+      end process;
+   
+   end generate goutput;
+
+   -- synthesis translate_on  
 
 end architecture;
 

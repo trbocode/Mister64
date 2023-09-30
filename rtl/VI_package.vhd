@@ -19,6 +19,7 @@ package pVI is
       inVsync                 : std_logic;
       interlacedDisplayField  : std_logic;
       newLine                 : std_logic;
+      newFrame                : std_logic;
       VI_CURRENT              : unsigned(8 downto 0);
    end record;
    
@@ -40,5 +41,19 @@ package pVI is
       g              : std_logic_vector(7 downto 0);
       b              : std_logic_vector(7 downto 0);
    end record; 
+   
+   type tfetchelement is record
+      r   : unsigned(7 downto 0);
+      g   : unsigned(7 downto 0);
+      b   : unsigned(7 downto 0);
+      c   : unsigned(2 downto 0);
+   end record;   
+   
+   type tfetchshift is array(0 to 4) of tfetchelement;
+   
+   type tfetcharray_AA is array(0 to 5) of tfetchelement;
+   type tfetcharray_DD is array(0 to 7) of tfetchelement;
+  
+   type tcolor is array(0 to 2) of unsigned(7 downto 0);
    
 end package;

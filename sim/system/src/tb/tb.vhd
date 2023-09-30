@@ -110,6 +110,8 @@ begin
       
       ISPAL                 => '0',
       CROPBOTTOM            => "00",
+      VI_BILINEAROFF        => '0',
+      
       CICTYPE               => "0000",
       RAMSIZE8              => '1',
       DATACACHEON           => '1',
