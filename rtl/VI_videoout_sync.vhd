@@ -109,7 +109,7 @@ begin
                --videoout_out.isPal <= '1';
             else
                --htotal <= (62500000 / 60 / 262); -- overwritten below
-               htotal <= 3980;
+               htotal <= 3970;
                vtotal <= 262;
                --videoout_out.isPal <= '0';
             end if;
@@ -246,7 +246,7 @@ begin
                else
                   videoout_out.hblank <= '1';
                   if (videoout_out.hblank = '0') then
-                     hsync_start <= (nextHCount / 2) + (16 * clkDiv);
+                     hsync_start <= (nextHCount / 2) + (nextHCount / 4) + (nextHCount / 32);
                      hsync_end   <= (nextHCount / 2);
                   end if;
                end if;

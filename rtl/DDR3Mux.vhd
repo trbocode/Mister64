@@ -256,7 +256,9 @@ begin
                      -- writing/reading behind ram
                      if ((RAMSIZE8_2x = '1' and rdram_address(activeIndex)(27 downto 23) > 0) or (RAMSIZE8_2x = '0' and rdram_address(activeIndex)(27 downto 22) > 0)) then
                         if (activeIndex /= DDR3MUX_SS) then
-                           error_outReq   <= '1';
+                           if (activeIndex /= DDR3MUX_VI) then -- VI reading cannot damage and request outside will happen, e.g. reading previous line with framebuffer at Address 0
+                              error_outReq   <= '1';
+                           end if;
                            if (rdram_rnw(activeIndex) = '1') then
                               ddr3_ADDR(24 downto 0) <= 25x"100000";
                            else

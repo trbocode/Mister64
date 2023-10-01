@@ -10,32 +10,46 @@ use work.pFunctions.all;
 entity VI_outProcess is
    port 
    (
-      clk1x              : in  std_logic;
-      reset              : in  std_logic;
+      clk1x                   : in  std_logic;
+      reset                   : in  std_logic;
+            
+      ISPAL                   : in  std_logic;
+      VI_BILINEAROFF          : in  std_logic;
+      VI_GAMMAOFF             : in  std_logic;
       
-      VI_BILINEAROFF     : in  std_logic;
-      
-      VI_H_VIDEO_START   : in unsigned(9 downto 0);
-      VI_H_VIDEO_END     : in unsigned(9 downto 0);
-      VI_X_SCALE_FACTOR  : in unsigned(11 downto 0);
-      VI_X_SCALE_OFFSET  : in unsigned(11 downto 0);
-      
-      newFrame           : in  std_logic;
-      startOut           : in  std_logic;
-      fracYout           : in  unsigned(4 downto 0);
-      
-      filter_y           : in  std_logic;
-      filterAddr         : out unsigned(10 downto 0) := (others => '0');
-      filterData         : in  unsigned(23 downto 0);
-      
-      out_pixel          : out std_logic := '0';
-      out_x              : out unsigned(9 downto 0) := (others => '0');        
-      out_y              : out unsigned(9 downto 0) := (others => '0');
-      out_color          : out unsigned(23 downto 0) := (others => '0')
+      VI_CTRL_GAMMA_ENABLE    : in  std_logic;
+      VI_H_VIDEO_START        : in  unsigned(9 downto 0);
+      VI_H_VIDEO_END          : in  unsigned(9 downto 0);
+      VI_X_SCALE_FACTOR       : in  unsigned(11 downto 0);
+      VI_X_SCALE_OFFSET       : in  unsigned(11 downto 0);
+            
+      newFrame                : in  std_logic;
+      startOut                : in  std_logic;
+      fracYout                : in  unsigned(4 downto 0);
+            
+      filter_y                : in  std_logic;
+      filterAddr              : out unsigned(10 downto 0) := (others => '0');
+      filterData              : in  unsigned(23 downto 0);
+            
+      out_pixel               : out std_logic := '0';
+      out_x                   : out unsigned(9 downto 0) := (others => '0');        
+      out_y                   : out unsigned(9 downto 0) := (others => '0');
+      out_color               : out unsigned(23 downto 0) := (others => '0')
    );
 end entity;
 
 architecture arch of VI_outProcess is
+
+   constant GUARD_START_NTSC : integer := 108;
+   constant GUARD_START_PAL  : integer := 128;
+   constant GUARD_STOP_NTSC  : integer := 748; -- 108+640
+   constant GUARD_STOP_PAL   : integer := 768; -- 128+640
+   
+   signal GUARD_START        : integer range 108 to 128;
+   signal GUARD_STOP         : integer range 748 to 768;   
+   
+   signal H_GUARD_START      : unsigned(9 downto 0) := (others => '0');
+   signal H_GUARD_STOP       : unsigned(9 downto 0) := (others => '0'); 
 
    type tstate is
    (
@@ -45,14 +59,15 @@ architecture arch of VI_outProcess is
       FETCH1,
       FETCH2,
       FETCH3,
-      NEXTPIXEL,
-      LASTPIXEL,
-      NEXTY
+      NEXTPIXEL
    );
    signal state         : tstate := IDLE; 
    
    signal dx            : unsigned(9 downto 0) := (others => '0');
    signal fetchLine     : std_logic := '0';
+   
+   signal fetch_x       : unsigned(9 downto 0) := (others => '0');        
+   signal fetch_y       : unsigned(9 downto 0) := (others => '0');
    
    signal x_accu        : unsigned(19 downto 0) := (others => '0');
    
@@ -76,10 +91,26 @@ architecture arch of VI_outProcess is
    signal bi_shift      : tbi_signed;
    signal bi_result     : tcolor;
    
-   signal out_next      : std_logic := '0';
-   signal out_next_1    : std_logic := '0';
+   signal bi_start      : std_logic := '0';
+   signal bi_x          : unsigned(9 downto 0);        
+   signal bi_y          : unsigned(9 downto 0);
+   signal bi_guard      : std_logic := '0';
+   -- synthesis translate_off
+   signal bi_clear      : std_logic := '0';
+   -- synthesis translate_on
+   
+   signal gamma_start   : std_logic := '0';
+   signal gamma_start_1 : std_logic := '0';
+   signal gamma_start_2 : std_logic := '0';
+   signal gamma_start_3 : std_logic := '0';
+   
+   signal gamma_addr    : unsigned(7 downto 0);
+   signal gamma_read    : unsigned(7 downto 0);
 
 begin 
+
+   GUARD_START <= GUARD_START_PAL when (ISPAL = '1') else GUARD_START_NTSC;
+   GUARD_STOP  <= GUARD_STOP_PAL  when (ISPAL = '1') else GUARD_STOP_NTSC;
    
    filterAddr <= fetchLine & (x_accu(19 downto 10) + 2) when (state = FETCH1 or state = FETCH2) else fetchLine & (x_accu(19 downto 10) + 1);
    
@@ -87,18 +118,29 @@ begin
    begin
       if rising_edge(clk1x) then
          
-         out_pixel <= '0';
-         out_next  <= '0';
+         out_pixel    <= '0';
+         bi_start     <= '0';
+         gamma_start  <= '0';
+         
+         H_GUARD_START <= VI_H_VIDEO_START;
+         if (VI_H_VIDEO_START >= GUARD_START) then
+            H_GUARD_START <= VI_H_VIDEO_START + 8;
+         end if;              
+
+         H_GUARD_STOP <= VI_H_VIDEO_END;
+         if (VI_H_VIDEO_END <= GUARD_STOP) then
+            H_GUARD_STOP <= VI_H_VIDEO_END - 7;
+         end if;         
          
          case (state) is
          
             when IDLE =>
                if (newFrame = '1') then
-                  out_y     <= (others => '0');
+                  fetch_y   <= (others => '0');
                end if;
                if (startOut = '1') then
                   state     <= STARTFETCH;
-                  out_x     <= (others => '0');    
+                  fetch_x   <= (others => '0');    
                   dx        <= VI_H_VIDEO_START;
                   x_accu    <= 8x"0" & VI_X_SCALE_OFFSET;
                   fetchLine <= not filter_y;
@@ -140,18 +182,26 @@ begin
             when NEXTPIXEL =>
                state          <= FETCH0;
                fetchLine      <= not fetchLine;
-               out_next       <= '1';
                dx             <= dx + 1;
-               if ((dx + 1) >= VI_H_VIDEO_END) then
-                  state <= LASTPIXEL;
+               fetch_x        <= fetch_x + 1;
+               if (fetch_x >= 639) then
+                  state    <= IDLE;
+                  fetch_y  <= fetch_y + 1;
                end if;
-         
-            when LASTPIXEL =>
-               state  <= NEXTY;
                
-            when NEXTY =>
-               state  <= IDLE;
-               out_y  <= out_y + 1;
+               bi_start       <= '1';
+               bi_x           <= fetch_x;
+               bi_y           <= fetch_y;
+               bi_guard       <= '0';
+               if (dx < H_GUARD_START or dx >= H_GUARD_STOP) then
+                  bi_guard    <= '1';
+               end if;
+               -- synthesis translate_off
+               bi_clear       <= '0';
+               if (dx >= VI_H_VIDEO_END) then
+                  bi_clear    <= '1';
+               end if;
+               -- synthesis translate_on
          
          end case;
             
@@ -159,6 +209,7 @@ begin
             state <= IDLE;
          end if;
          
+         -- bilinear store
          if (state = FETCH3) then
             bi_left <= bi_result;
          end if;
@@ -166,21 +217,45 @@ begin
             bi_right <= bi_result;
          end if;
          
-         out_next_1 <= out_next;
-         if (out_next = '1') then
-            out_pixel      <= '1';
-            --out_color      <= topleft(2) & topleft(1) & topleft(0);
-            out_color <= bi_result(2) & bi_result(1) & bi_result(0);
+         if (bi_start = '1') then
+            bi_right    <= bi_result;
+            gamma_start <= '1';
          end if;
-   
-         if (out_next_1 = '1') then
-            out_x <= out_x + 1;
+         
+         -- gamma
+         gamma_start_1 <= gamma_start;
+         gamma_start_2 <= gamma_start_1;
+         gamma_start_3 <= gamma_start_2;
+         
+         if (gamma_start = '1') then
+            out_x     <= bi_x;
+            out_y     <= bi_y;
+         end if;
+         
+         if (gamma_start_1 = '1') then
+            out_color(7 downto 0) <= gamma_read;
+         end if;
+            
+         if (gamma_start_2 = '1') then
+            out_color(15 downto 8) <= gamma_read;
+         end if;
+         
+         if (gamma_start_3 = '1') then
+            out_pixel <= '1';
+            out_color(23 downto 16) <= gamma_read;
+            if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
+               out_color <= bi_right(2) & bi_right(1) & bi_right(0);
+            end if;
+            if (bi_guard = '1') then
+               out_color <= (others => '0');
+            end if;
          end if;
        
       end if;
    end process;
    
    
+   -- bilinear calc
    process (all)
    begin
       
@@ -212,6 +287,20 @@ begin
       
    end process;
    
+   -- gamma fetch
+   gamma_addr <= bi_right(0) when (gamma_start = '1') else 
+                 bi_right(1) when (gamma_start_1 = '1') else 
+                 bi_right(2);
+   
+   iVI_gammatable : entity work.VI_gammatable
+   port map
+   (
+      clk   => clk1x,
+      addr  => gamma_addr,
+      data  => gamma_read
+   );
+   
+   
 --##############################################################
 --############################### export
 --##############################################################
@@ -236,13 +325,13 @@ begin
             
             wait until rising_edge(clk1x);
             
-            if (out_pixel = '1') then
+            if (gamma_start = '1' and bi_clear = '0') then
                write(line_out, string'(" X ")); 
-               write(line_out, to_string_len(to_integer(out_x), 5));
+               write(line_out, to_string_len(to_integer(bi_x), 5));
                write(line_out, string'(" Y ")); 
-               write(line_out, to_string_len(to_integer(out_y), 5));
+               write(line_out, to_string_len(to_integer(bi_y), 5));
                write(line_out, string'(" C "));
-               color32 := 8x"0" & out_color;
+               color32 := 8x"0" & bi_right(2) & bi_right(1) & bi_right(0);
                write(line_out, to_hstring(color32));
                writeline(outfile, line_out);
                tracecounts3 <= tracecounts3 + 1;

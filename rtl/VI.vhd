@@ -25,6 +25,7 @@ entity VI is
       ISPAL            : in  std_logic;
       CROPBOTTOM       : in  unsigned(1 downto 0);
       VI_BILINEAROFF   : in  std_logic;
+      VI_GAMMAOFF      : in  std_logic;
       
       errorEna         : in  std_logic;
       errorCode        : in  unsigned(23 downto 0);
@@ -323,6 +324,7 @@ begin
       ISPAL                => ISPAL,        
       CROPBOTTOM           => CROPBOTTOM,
       VI_BILINEAROFF       => VI_BILINEAROFF,
+      VI_GAMMAOFF          => VI_GAMMAOFF,
   
       errorEna             => errorEna, 
       errorCode            => errorCode,
@@ -332,6 +334,7 @@ begin
       
       VI_CTRL_TYPE         => VI_CTRL_TYPE,
       VI_CTRL_SERRATE      => VI_CTRL_SERRATE,
+      VI_CTRL_GAMMA_ENABLE => VI_CTRL_GAMMA_ENABLE,
       VI_ORIGIN            => VI_ORIGIN,   
       VI_WIDTH             => VI_WIDTH,  
       VI_X_SCALE_FACTOR    => VI_X_SCALE_FACTOR,

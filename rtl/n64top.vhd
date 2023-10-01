@@ -27,6 +27,7 @@ entity n64top is
       ISPAL                   : in  std_logic;
       CROPBOTTOM              : in  unsigned(1 downto 0);
       VI_BILINEAROFF          : in  std_logic;
+      VI_GAMMAOFF             : in  std_logic;
       
       CICTYPE                 : in  std_logic_vector(3 downto 0);
       RAMSIZE8                : in  std_logic;
@@ -715,6 +716,7 @@ begin
       ISPAL                => ISPAL,
       CROPBOTTOM           => CROPBOTTOM,
       VI_BILINEAROFF       => VI_BILINEAROFF,
+      VI_GAMMAOFF          => VI_GAMMAOFF,
       
       errorEna             => errorEna, 
       errorCode            => errorCode,

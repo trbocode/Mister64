@@ -22,6 +22,7 @@ entity VI_videoout is
       ISPAL                : in  std_logic;
       CROPBOTTOM           : in  unsigned(1 downto 0);
       VI_BILINEAROFF       : in  std_logic;
+      VI_GAMMAOFF          : in  std_logic;
       
       errorEna             : in  std_logic;
       errorCode            : in  unsigned(23 downto 0);
@@ -31,6 +32,7 @@ entity VI_videoout is
       
       VI_CTRL_TYPE         : in unsigned(1 downto 0);
       VI_CTRL_SERRATE      : in std_logic;
+      VI_CTRL_GAMMA_ENABLE : in std_logic;
       VI_ORIGIN            : in unsigned(23 downto 0);
       VI_WIDTH             : in unsigned(11 downto 0);
       VI_X_SCALE_FACTOR    : in unsigned(11 downto 0);
@@ -307,28 +309,31 @@ begin
    iVI_outProcess : entity work.VI_outProcess
    port map
    (
-      clk1x             => clk1x,           
-      reset             => reset_1x,        
-
-      VI_BILINEAROFF    => VI_BILINEAROFF,
+      clk1x                   => clk1x,           
+      reset                   => reset_1x,        
+      
+      ISPAL                   => ISPAL,
+      VI_BILINEAROFF          => VI_BILINEAROFF,
+      VI_GAMMAOFF             => VI_GAMMAOFF,
                         
-      VI_H_VIDEO_START  => VI_H_VIDEO_START,
-      VI_H_VIDEO_END    => VI_H_VIDEO_END,  
-      VI_X_SCALE_FACTOR => VI_X_SCALE_FACTOR,
-      VI_X_SCALE_OFFSET => VI_X_SCALE_OFFSET,
-                        
-      newFrame          => videoout_reports.newFrame,             
-      startOut          => startOut,        
-      fracYout          => fracYout,        
-                        
-      filter_y          => filter_y_out(0),
-      filterAddr        => filterAddr,      
-      filterData        => unsigned(filterram_do_B),      
-                        
-      out_pixel         => out_pixel,       
-      out_x             => out_x,               
-      out_y             => out_y,           
-      out_color         => out_color       
+      VI_CTRL_GAMMA_ENABLE    => VI_CTRL_GAMMA_ENABLE,
+      VI_H_VIDEO_START        => VI_H_VIDEO_START,
+      VI_H_VIDEO_END          => VI_H_VIDEO_END,  
+      VI_X_SCALE_FACTOR       => VI_X_SCALE_FACTOR,
+      VI_X_SCALE_OFFSET       => VI_X_SCALE_OFFSET,
+                              
+      newFrame                => videoout_reports.newFrame,             
+      startOut                => startOut,        
+      fracYout                => fracYout,        
+                              
+      filter_y                => filter_y_out(0),
+      filterAddr              => filterAddr,      
+      filterData              => unsigned(filterram_do_B),      
+                              
+      out_pixel               => out_pixel,       
+      out_x                   => out_x,               
+      out_y                   => out_y,           
+      out_color               => out_color       
    );
    
    outram_addr_A <= out_y(0) & std_logic_vector(out_x);
