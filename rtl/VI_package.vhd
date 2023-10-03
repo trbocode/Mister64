@@ -56,4 +56,6 @@ package pVI is
   
    type tcolor is array(0 to 2) of unsigned(7 downto 0);
    
+   type tfetchArray is array(0 to 2) of unsigned(31 downto 0);
+   
 end package;

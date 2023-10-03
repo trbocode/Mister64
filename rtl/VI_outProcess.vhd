@@ -58,8 +58,7 @@ architecture arch of VI_outProcess is
       FETCH0,
       FETCH1,
       FETCH2,
-      FETCH3,
-      NEXTPIXEL
+      FETCH3
    );
    signal state         : tstate := IDLE; 
    
@@ -78,6 +77,7 @@ architecture arch of VI_outProcess is
    
    signal bi_left       : tcolor := (others => (others => '0'));
    signal bi_right      : tcolor := (others => (others => '0'));
+   signal bi_out        : tcolor := (others => (others => '0'));
    signal bi_xfrac      : unsigned(4 downto 0) := (others => '0');
    
    type tbi_signed is array(0 to 2) of signed(8 downto 0);
@@ -92,6 +92,7 @@ architecture arch of VI_outProcess is
    signal bi_result     : tcolor;
    
    signal bi_start      : std_logic := '0';
+   signal bi_start_1    : std_logic := '0';
    signal bi_x          : unsigned(9 downto 0);        
    signal bi_y          : unsigned(9 downto 0);
    signal bi_guard      : std_logic := '0';
@@ -99,6 +100,7 @@ architecture arch of VI_outProcess is
    signal bi_clear      : std_logic := '0';
    -- synthesis translate_on
    
+   signal gamma_guard   : std_logic := '0';
    signal gamma_start   : std_logic := '0';
    signal gamma_start_1 : std_logic := '0';
    signal gamma_start_2 : std_logic := '0';
@@ -171,17 +173,16 @@ begin
                topright(1)  <= filterData(15 downto  8);
                topright(2)  <= filterData(23 downto 16);
                
-            when FETCH3 =>
-               state          <= NEXTPIXEL;
                x_accu         <= x_accu + VI_X_SCALE_FACTOR;
                bi_xfrac       <= x_accu(9 downto 5);
+               
+            when FETCH3 =>
+               state          <= FETCH0;
+               fetchLine      <= not fetchLine;
                bottomright(0) <= filterData( 7 downto  0);
                bottomright(1) <= filterData(15 downto  8);
                bottomright(2) <= filterData(23 downto 16);
 
-            when NEXTPIXEL =>
-               state          <= FETCH0;
-               fetchLine      <= not fetchLine;
                dx             <= dx + 1;
                fetch_x        <= fetch_x + 1;
                if (fetch_x >= 639) then
@@ -213,13 +214,16 @@ begin
          if (state = FETCH3) then
             bi_left <= bi_result;
          end if;
-         if (state = NEXTPIXEL) then
+         
+         bi_start_1 <= bi_start;
+         if (bi_start = '1') then
             bi_right <= bi_result;
          end if;
          
-         if (bi_start = '1') then
-            bi_right    <= bi_result;
+         if (bi_start_1 = '1') then
+            bi_out      <= bi_result;
             gamma_start <= '1';
+            gamma_guard <= bi_guard;
          end if;
          
          -- gamma
@@ -244,9 +248,9 @@ begin
             out_pixel <= '1';
             out_color(23 downto 16) <= gamma_read;
             if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
-               out_color <= bi_right(2) & bi_right(1) & bi_right(0);
+               out_color <= bi_out(2) & bi_out(1) & bi_out(0);
             end if;
-            if (bi_guard = '1') then
+            if (gamma_guard = '1') then
                out_color <= (others => '0');
             end if;
          end if;
@@ -263,7 +267,7 @@ begin
          bi_a     <= topleft;
          bi_b     <= bottomleft;
          bi_frac  <= fracYout;
-      elsif (state = NEXTPIXEL) then
+      elsif (bi_start = '1') then
          bi_a     <= topright;
          bi_b     <= bottomright;
          bi_frac  <= fracYout;
@@ -288,9 +292,9 @@ begin
    end process;
    
    -- gamma fetch
-   gamma_addr <= bi_right(0) when (gamma_start = '1') else 
-                 bi_right(1) when (gamma_start_1 = '1') else 
-                 bi_right(2);
+   gamma_addr <= bi_out(0) when (gamma_start = '1') else 
+                 bi_out(1) when (gamma_start_1 = '1') else 
+                 bi_out(2);
    
    iVI_gammatable : entity work.VI_gammatable
    port map
@@ -331,7 +335,7 @@ begin
                write(line_out, string'(" Y ")); 
                write(line_out, to_string_len(to_integer(bi_y), 5));
                write(line_out, string'(" C "));
-               color32 := 8x"0" & bi_right(2) & bi_right(1) & bi_right(0);
+               color32 := 8x"0" & bi_out(2) & bi_out(1) & bi_out(0);
                write(line_out, to_hstring(color32));
                writeline(outfile, line_out);
                tracecounts3 <= tracecounts3 + 1;

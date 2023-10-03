@@ -101,16 +101,19 @@ architecture arch of VI_videoout is
    signal videoout_request        : tvideoout_request;  
 
    -- processing
-   signal rdram_storeAddr     : unsigned(10 downto 0) := (others => '0');
-   signal rdram_store         : std_logic := '0';
+   signal rdram_storeAddr     : unsigned(8 downto 0);
+   signal rdram_store         : std_logic_vector(2 downto 0);
    
-   signal doubleProc          : std_logic; 
    signal startProc           : std_logic; 
+   signal procPtr             : std_logic_vector(2 downto 0);
+   signal procDone            : std_logic; 
    signal startOut            : std_logic; 
    signal fracYout            : unsigned(4 downto 0);
    
-   signal fetchAddr           : unsigned(11 downto 0);
-   signal fetchdata           : std_logic_vector(31 downto 0);
+   signal fetchAddr           : unsigned(9 downto 0);
+   type tfetchDataArray is array(0 to 2) of std_logic_vector(31 downto 0);
+   signal fetchDataArray : tfetchDataArray;
+   signal fetchdata           : tfetchArray;
                               
    signal proc_pixel          : std_logic;
    signal proc_border         : std_logic;
@@ -198,8 +201,9 @@ begin
       lineNr             => videoout_request.lineInNext,
       fetch              => videoout_request.fetch,
       
-      doubleProc         => doubleProc,
       startProc          => startProc,
+      procPtr            => procPtr,
+      procDone           => procDone,
       startOut           => startOut,
       fracYout           => fracYout,
       
@@ -214,27 +218,42 @@ begin
       rdram_storeAddr    => rdram_storeAddr
    );
    
-   ilineram: entity mem.dpram_dif
-   generic map 
-   ( 
-      addr_width_a  => 11,
-      data_width_a  => 64,
-      addr_width_b  => 12,
-      data_width_b  => 32
-   )
-   port map
-   (
-      clock_a     => clk2x,
-      address_a   => std_logic_vector(rdram_storeAddr),
-      data_a      => ddr3_DOUT,
-      wren_a      => (ddr3_DOUT_READY and rdram_store),
-      
-      clock_b     => clk1x,
-      address_b   => std_logic_vector(fetchAddr),
-      data_b      => 32x"0",
-      wren_b      => '0',
-      q_b         => fetchdata
-   );   
+   glinerams: for i in 0 to 2 generate
+   begin
+      ilineram: entity mem.dpram_dif
+      generic map 
+      ( 
+         addr_width_a  => 9,
+         data_width_a  => 64,
+         addr_width_b  => 10,
+         data_width_b  => 32
+      )
+      port map
+      (
+         clock_a     => clk2x,
+         address_a   => std_logic_vector(rdram_storeAddr),
+         data_a      => ddr3_DOUT,
+         wren_a      => (ddr3_DOUT_READY and rdram_store(i)),
+         
+         clock_b     => clk1x,
+         address_b   => std_logic_vector(fetchAddr),
+         data_b      => 32x"0",
+         wren_b      => '0',
+         q_b         => fetchDataArray(i)
+      );   
+   end generate;
+   
+   fetchdata(0) <= unsigned(fetchDataArray(0)) when (procPtr(2) = '1') else
+                   unsigned(fetchDataArray(1)) when (procPtr(0) = '1') else
+                   unsigned(fetchDataArray(2));
+                 
+   fetchdata(1) <= unsigned(fetchDataArray(1)) when (procPtr(2) = '1') else
+                   unsigned(fetchDataArray(2)) when (procPtr(0) = '1') else
+                   unsigned(fetchDataArray(0));
+              
+   fetchdata(2) <= unsigned(fetchDataArray(2)) when (procPtr(2) = '1') else
+                   unsigned(fetchDataArray(0)) when (procPtr(0) = '1') else
+                   unsigned(fetchDataArray(1));
    
    iVI_lineProcess : entity work.VI_lineProcess
    port map
@@ -245,12 +264,12 @@ begin
       VI_CTRL_TYPE       => VI_CTRL_TYPE,  
       VI_WIDTH           => VI_WIDTH,      
                          
-      newFrame           => videoout_reports.newFrame,      
-      doubleProc         => doubleProc,     
+      newFrame           => videoout_reports.newFrame,          
       startProc          => startProc,     
+      procDone           => procDone,     
                          
       fetchAddr          => fetchAddr,     
-      fetchdata          => unsigned(fetchdata),     
+      fetchdata          => fetchdata,
                          
       proc_pixel         => proc_pixel,    
       proc_border        => proc_border,    

@@ -24,8 +24,9 @@ entity VI_linefetch is
       lineNr             : in  unsigned(8 downto 0);
       fetch              : in  std_logic;
       
-      doubleProc         : out std_logic := '0';
       startProc          : out std_logic := '0';
+      procPtr            : out std_logic_vector(2 downto 0) := (others => '0');
+      procDone           : in  std_logic;
       startOut           : out std_logic := '0';
       fracYout           : out unsigned(4 downto 0);
       
@@ -36,8 +37,8 @@ entity VI_linefetch is
       rdram_granted      : in  std_logic;
       rdram_done         : in  std_logic;
       ddr3_DOUT_READY    : in  std_logic;
-      rdram_store        : out std_logic := '0';
-      rdram_storeAddr    : out unsigned(10 downto 0) := (others => '0')
+      rdram_store        : out std_logic_vector(2 downto 0) := (others => '0');
+      rdram_storeAddr    : out unsigned(8 downto 0) := (others => '0')
    );
 end entity;
 
@@ -47,14 +48,17 @@ architecture arch of VI_linefetch is
    (
       IDLE,
       REQUESTLINE,
-      WAITDONE
+      WAITDONE,
+      WAITPROC
    );
    signal state            : tstate := IDLE;
+   
+   signal ram_offset       : signed(24 downto 0) := (others => '0');
 
    signal lineAct          : unsigned(8 downto 0) := (others => '0');
-   signal lineInCnt        : unsigned(1 downto 0) := (others => '0');
+   signal lineInPtr        : std_logic_vector(2 downto 0) := (others => '0');
    signal lineInFetched    : unsigned(2 downto 0) := (others => '0');   
-   signal lineFirst        : std_logic := '0';
+   signal lineProcCnt      : std_logic := '0';
    
    signal line_prefetch    : integer range 0 to 8;   
    signal lineWidth        : unsigned(13 downto 0);
@@ -62,11 +66,9 @@ architecture arch of VI_linefetch is
    signal y_accu           : unsigned(19 downto 0) := (others => '0');
    signal y_diff           : unsigned(9 downto 0);
    
-   signal out_wait         : integer range 0 to 127 := 0;
+   signal out_wait         : integer range 0 to 15 := 0;
    
 begin 
-  
-   doubleProc    <= VI_Y_SCALE_FACTOR(11);
    
    line_prefetch <= 8 when (VI_CTRL_TYPE = "11") else 4;
    
@@ -119,38 +121,29 @@ begin
             
                when IDLE =>
                   if (newFrame = '1') then
-                     rdram_address <= ("0000" & VI_ORIGIN) - to_integer(lineWidth * 2) - line_prefetch;
+                     ram_offset    <= to_signed(0, ram_offset'length) - to_integer(lineWidth) - line_prefetch;
                      y_accu        <= 8x"0" & VI_Y_SCALE_OFFSET;
                      lineInFetched <= "000";
-                     lineInCnt     <= "00";
-                     lineFirst     <= '1';
+                     lineInPtr     <= "001";
+                     lineProcCnt   <= '1';
+                     state         <= REQUESTLINE;
                   end if;
                   lineAct  <= lineNr;
                   if (lineNr /= lineAct and fetch = '1') then
-                     if (lineFirst = '1') then
-                        lineInFetched(2) <= '0';
+                     y_accu <= y_accu_new; 
+                     if (y_diff > 0) then
+                        state <= REQUESTLINE;
                         if (y_diff > 1) then
-                           lineInFetched(1) <= '0';
+                           lineProcCnt <= '1';
                         end if;
-                        lineFirst        <= '0';
                      else
-                        y_accu <= y_accu_new; 
-                        if (y_diff > 0) then
-                           lineInFetched(2) <= '0';
-                           if (y_diff > 1) then
-                              lineInFetched(1) <= '0';
-                           end if;
-                        else
-                           out_wait   <= 127;
-                        end if;
+                        out_wait <= 15;
                      end if;
-                  end if;
-                  if (lineInFetched /= "111") then
-                     state <= REQUESTLINE;
                   end if;
                   
                when REQUESTLINE =>
-                  rdram_address <= rdram_address + lineWidth;
+                  rdram_address <= ("0000" & VI_ORIGIN) + to_integer(ram_offset);
+                  ram_offset    <= ram_offset + to_integer(lineWidth);
                   if (VI_CTRL_TYPE = "10") then
                      state            <= WAITDONE;
                      rdram_request    <= '1';
@@ -164,14 +157,25 @@ begin
                when WAITDONE  => 
                   if (rdram_done = '1') then
                      state          <= IDLE;
-                     lineInCnt      <= lineInCnt + 1;   
+                     lineInPtr      <= lineInPtr(1 downto 0) & lineInPtr(2);   
                      lineInFetched  <= lineInFetched(1 downto 0) & '1';    
                      if (lineInFetched(1 downto 0) = "11") then
-                        startProc <= '1';
-                        if (lineFirst = '0') then
-                           out_wait  <= 127;
+                        startProc   <= '1';
+                        procPtr     <= lineInPtr;
+                        lineProcCnt <= '0';
+                        if (lineProcCnt = '1') then
+                           state <= WAITPROC;
+                        else
+                           out_wait <= 15;
                         end if;
+                     else
+                        state <= REQUESTLINE;
                      end if;
+                  end if;
+            
+               when WAITPROC =>
+                  if (procDone = '1') then
+                     state <= REQUESTLINE;
                   end if;
             
             end case;
@@ -187,8 +191,8 @@ begin
       if rising_edge(clk2x) then
       
          if (rdram_granted = '1') then
-            rdram_store       <= '1';
-            rdram_storeAddr   <= lineInCnt & 9x"000";
+            rdram_store       <= lineInPtr;
+            rdram_storeAddr   <= (others => '0');
          end if;
          
           if (ddr3_DOUT_READY = '1') then
@@ -196,7 +200,7 @@ begin
           end if;
           
           if (rdram_done = '1') then
-            rdram_store  <= '0';
+            rdram_store  <= "000";
           end if;
 
       end if;

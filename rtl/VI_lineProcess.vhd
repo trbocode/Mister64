@@ -16,11 +16,11 @@ entity VI_lineProcess is
       VI_WIDTH           : in unsigned(11 downto 0);
       
       newFrame           : in  std_logic;
-      doubleProc         : in  std_logic;
       startProc          : in  std_logic;
+      procDone           : out std_logic := '0';
       
-      fetchAddr          : out unsigned(11 downto 0) := (others => '0');
-      fetchdata          : in  unsigned(31 downto 0);
+      fetchAddr          : out unsigned(9 downto 0) := (others => '0');
+      fetchdata          : in  tfetchArray;
       
       proc_pixel         : out std_logic := '0';
       proc_border        : out std_logic := '0';
@@ -38,14 +38,13 @@ architecture arch of VI_lineProcess is
    (
       IDLE,
       FETCH0,
-      FETCH1,
-      FETCH2,
-      FETCH3,
-      NEXTPIXEL
+      FETCH
    );
    signal state         : tstate := IDLE; 
    
-   signal fetchHigh     : unsigned(1 downto 0) := (others => '0');
+   signal lineLength    : unsigned(9 downto 0) := (others => '0');        
+   signal cnt_x         : unsigned(9 downto 0) := (others => '0');        
+   signal cnt_y         : unsigned(9 downto 0) := (others => '0');
    
    signal firstword16   : std_logic := '0';     
    signal prefetch      : integer range 0 to 5 := 0;     
@@ -54,29 +53,40 @@ architecture arch of VI_lineProcess is
    signal fetchshift1   : tfetchshift := (others => (others => (others => '0')));
    signal fetchshift2   : tfetchshift := (others => (others => (others => '0')));
    
-   signal fetchelement  : tfetchelement;
-   signal fetchdata16   : unsigned(15 downto 0);
+   type tfetchelementArray is array(0 to 2) of tfetchelement;
+   signal fetchArray    : tfetchelementArray;
+   
+   type tfetchdata16 is array(0 to 2) of unsigned(15 downto 0);
+   signal fetchdata16   : tfetchdata16;
    
    signal lineEnd       : std_logic;
 
 begin 
   
-   fetchdata16 <= byteswap16(fetchdata(15 downto 0)) when (firstword16 = '1') else byteswap16(fetchdata(31 downto 16));
-  
    process (all)
    begin
-      if (VI_CTRL_TYPE = "11") then
-         fetchelement.r <= fetchdata( 7 downto  0);
-         fetchelement.g <= fetchdata(15 downto  8);
-         fetchelement.b <= fetchdata(23 downto 16);
-         fetchelement.c <= fetchdata(26 downto 24);
-      else
-         fetchelement.r <= fetchdata16(15 downto 11) & "000";
-         fetchelement.g <= fetchdata16(10 downto  6) & "000";
-         fetchelement.b <= fetchdata16( 5 downto  1) & "000";
-         fetchelement.c <= fetchdata16(0) & "00";
-      end if;
-   end process;
+      for i in 0 to 2 loop
+      
+         if (firstword16 = '1') then
+            fetchdata16(i) <= byteswap16(fetchdata(i)(15 downto 0));
+         else 
+            fetchdata16(i) <= byteswap16(fetchdata(i)(31 downto 16));
+         end if;
+      
+         if (VI_CTRL_TYPE = "11") then
+            fetchArray(i).r <= fetchdata(i)( 7 downto  0);
+            fetchArray(i).g <= fetchdata(i)(15 downto  8);
+            fetchArray(i).b <= fetchdata(i)(23 downto 16);
+            fetchArray(i).c <= fetchdata(i)(26 downto 24);
+         else
+            fetchArray(i).r <= fetchdata16(i)(15 downto 11) & "000";
+            fetchArray(i).g <= fetchdata16(i)(10 downto  6) & "000";
+            fetchArray(i).b <= fetchdata16(i)( 5 downto  1) & "000";
+            fetchArray(i).c <= fetchdata16(i)(0) & "00";
+         end if;
+         
+      end loop;
+   end process;   
    
    proc_pixel_Mid    <= fetchshift1(2);
    
@@ -96,13 +106,16 @@ begin
    proc_pixels_DD(6) <= fetchshift2(2);
    proc_pixels_DD(7) <= fetchshift2(3);
    
-   lineEnd <= '1' when (proc_x > VI_WIDTH + 1) else '0';
+   lineLength <= to_unsigned(700, lineLength'length) when (VI_WIDTH > 700) else resize(VI_WIDTH + 1, lineLength'length);
+   
+   lineEnd <= '1' when (cnt_x > lineLength) else '0';
    
    process (clk1x)
    begin
       if rising_edge(clk1x) then
          
          proc_pixel <= '0';
+         procDone   <= '0';
          
          if (reset = '1') then
          
@@ -114,72 +127,61 @@ begin
             
                when IDLE =>
                   if (newFrame = '1') then
-                     proc_y    <= (others => '0');
-                     fetchHigh <= "00";
+                     cnt_y     <= (others => '0');
                   end if;
                   if (startProc = '1') then
-                     fetchAddr   <= fetchHigh & 10x"0";
+                     fetchAddr   <= (others => '0');
                      firstword16 <= '1';
                      state       <= FETCH0;
-                     proc_x      <= (others => '0');    
+                     cnt_x       <= (others => '0');    
                      prefetch    <= 5;
                      proc_border <= '1';
                   end if;
             
                when FETCH0 =>
-                  state <= FETCH1;
-                  fetchAddr(11 downto 10) <= fetchAddr(11 downto 10) + 1;
+                  state <= FETCH;
+                  if (VI_CTRL_TYPE = "11" or firstword16 = '0') then
+                     fetchAddr <= fetchAddr + 1;
+                  end if;
                   
-               when FETCH1 =>
-                  state <= FETCH2;
-                  fetchAddr(11 downto 10) <= fetchAddr(11 downto 10) + 1;
+               when FETCH =>
                   for i in 0 to 3 loop
                      fetchshift0(i) <= fetchshift0(i + 1);
                   end loop;
-                  fetchshift0(4) <= fetchelement;
+                  fetchshift0(4) <= fetchArray(0);
                   
-               when FETCH2 =>
-                  state <= FETCH3;
-                  fetchAddr(11 downto 10) <= fetchHigh;
                   for i in 0 to 3 loop
                      fetchshift1(i) <= fetchshift1(i + 1);
                   end loop;
-                  fetchshift1(4) <= fetchelement;
-                  
-               when FETCH3 =>
-                  if (prefetch > 0) then
-                     prefetch <= prefetch - 1;
-                     state    <= FETCH0;
-                  else
-                     proc_pixel  <= '1';
-                     state       <= NEXTPIXEL;
-                     if (lineEnd = '1') then
-                        proc_border <= '1';
-                     end if;
-                  end if;
-                  
-                  firstword16 <= not firstword16;
-                  if (VI_CTRL_TYPE = "11" or firstword16 = '0') then
-                     fetchAddr(9 downto 0) <= fetchAddr(9 downto 0) + 1;
-                  end if;
+                  fetchshift1(4) <= fetchArray(1);
                   
                   for i in 0 to 3 loop
                      fetchshift2(i) <= fetchshift2(i + 1);
                   end loop;
-                  fetchshift2(4) <= fetchelement;
-            
-               when NEXTPIXEL =>
-                  state       <= FETCH0;
-                  proc_x      <= proc_x + 1;
-                  proc_border <= '0';
-                  if (lineEnd = '1') then
-                     state     <= IDLE;
-                     proc_y    <= proc_y + 1;
-                     if (doubleProc = '1') then
-                        fetchHigh <= fetchHigh + 2;
-                     else 
-                        fetchHigh <= fetchHigh + 1;
+                  fetchshift2(4) <= fetchArray(2);
+                  
+                  if (prefetch > 0) then
+                     prefetch <= prefetch - 1;
+                  else
+                     proc_pixel  <= '1';
+                     proc_x      <= cnt_x;
+                     proc_y      <= cnt_y;
+                     if (cnt_x = 1) then
+                        proc_border <= '0';
                      end if;
+                     
+                     cnt_x       <= cnt_x + 1;
+                     if (lineEnd = '1') then
+                        proc_border <= '1';
+                        state     <= IDLE;
+                        procDone  <= '1';
+                        cnt_y     <= cnt_y + 1;
+                     end if;
+                  end if;
+                  
+                  firstword16 <= not firstword16;
+                  if (VI_CTRL_TYPE = "11" or firstword16 = '1') then
+                     fetchAddr <= fetchAddr + 1;
                   end if;
             
             end case;

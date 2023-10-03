@@ -84,11 +84,11 @@ begin
             
             wait until rising_edge(clk1x);
             
-            if (filter_pixel = '1') then
+            if (proc_pixel = '1') then
                write(line_out, string'(" X ")); 
-               write(line_out, to_string_len(to_integer(filter_x_out), 5));
+               write(line_out, to_string_len(to_integer(proc_x), 5));
                write(line_out, string'(" Y ")); 
-               write(line_out, to_string_len(to_integer(filter_y_out), 5));
+               write(line_out, to_string_len(to_integer(proc_y), 5));
                write(line_out, string'(" C "));
                color32 := 5x"0" & proc_pixel_Mid.c & proc_pixel_Mid.r & proc_pixel_Mid.g & proc_pixel_Mid.b;
                write(line_out, to_hstring(color32));

@@ -219,7 +219,12 @@ begin
                   exportNext_TexFt_db3  <= x"0000" & data16;
                   -- synthesis translate_on
                
-               when FORMAT_I => error_texMode <= '1'; -- should not be allowed
+               when FORMAT_I =>
+                  tex_color_read(0) <= data16(15 downto 8);
+                  tex_color_read(1) <= data16(7 downto 0);
+                  tex_color_read(2) <= data16(15 downto 8);
+                  tex_alpha_read    <= data16(7 downto 0);
+               
                when others => null;
             end case;
          

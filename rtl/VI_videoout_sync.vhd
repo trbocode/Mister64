@@ -173,7 +173,7 @@ begin
                   videoout_request.lineInNext <= to_unsigned(vposNew - vDisplayStart, 9);
                   videoout_request.fetch      <= '1';
                else
-                  videoout_request.lineInNext <= (others => '1');
+                  videoout_request.lineInNext <= (others => '0');
                end if;
               
             end if;
