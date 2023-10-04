@@ -57,5 +57,8 @@ package pVI is
    type tcolor is array(0 to 2) of unsigned(7 downto 0);
    
    type tfetchArray is array(0 to 2) of unsigned(31 downto 0);
+   type tfetchArray9 is array(0 to 2) of unsigned(1 downto 0);
+   
+   type taddr9offset is array(0 to 2) of integer range 0 to 15;
    
 end package;

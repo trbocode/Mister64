@@ -13,8 +13,8 @@ package pSDRAM is
    constant SDRAMMUX_SAV  : integer := 0;
    constant SDRAMMUX_PIF  : integer := 1;
    constant SDRAMMUX_PI   : integer := 2;
-   constant SDRAMMUX_VI   : integer := 3;
-   constant SDRAMMUX_RDP  : integer := 4;
+   constant SDRAMMUX_RDP  : integer := 3;
+   constant SDRAMMUX_VI   : integer := 4;
    
    type tSDRAMSingle     is array(0 to SDRAMMUXCOUNT - 1) of std_logic;
    type tSDRAMReqAddr    is array(0 to SDRAMMUXCOUNT - 1) of unsigned(26 downto 0);

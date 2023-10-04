@@ -26,6 +26,8 @@ entity VI is
       CROPBOTTOM       : in  unsigned(1 downto 0);
       VI_BILINEAROFF   : in  std_logic;
       VI_GAMMAOFF      : in  std_logic;
+      VI_DEDITHEROFF   : in  std_logic;
+      VI_AAOFF         : in  std_logic;
       
       errorEna         : in  std_logic;
       errorCode        : in  unsigned(23 downto 0);
@@ -39,6 +41,15 @@ entity VI is
       rdram_done       : in  std_logic;
       ddr3_DOUT        : in  std_logic_vector(63 downto 0);
       ddr3_DOUT_READY  : in  std_logic;
+      
+      sdram_request    : out std_logic := '0';
+      sdram_rnw        : out std_logic := '0'; 
+      sdram_address    : out unsigned(26 downto 0):= (others => '0');
+      sdram_burstcount : out unsigned(7 downto 0):= (others => '0');
+      sdram_granted    : in  std_logic;
+      sdram_done       : in  std_logic;
+      sdram_dataRead   : in  std_logic_vector(31 downto 0);
+      sdram_valid      : in  std_logic;
       
       video_hsync      : out std_logic := '0';
       video_vsync      : out std_logic := '0';
@@ -144,7 +155,7 @@ begin
             VI_CTRL_Reserved10             <= ss_in(0)(10);
             VI_CTRL_KILL_WE                <= ss_in(0)(11);
             VI_CTRL_PIXEL_ADVANCE          <= unsigned(ss_in(0)(15 downto 12));  
-            VI_CTRL_DEDITHER_FILTER_ENABLE <= '0'; -- bit 16 missing in SS format!
+            VI_CTRL_DEDITHER_FILTER_ENABLE <= ss_in(0)(62);
             
             VI_ORIGIN                      <= unsigned(ss_in(0)(39 downto 16));  
             VI_WIDTH                       <= unsigned(ss_in(0)(51 downto 40));             
@@ -315,61 +326,74 @@ begin
    )
    port map
    (
-      clk1x                => clk1x,
-      clk2x                => clk2x,
-      clkvid               => clkvid,
-      ce                   => ce,
-      reset_1x             => reset_1x,
-
-      ISPAL                => ISPAL,        
-      CROPBOTTOM           => CROPBOTTOM,
-      VI_BILINEAROFF       => VI_BILINEAROFF,
-      VI_GAMMAOFF          => VI_GAMMAOFF,
-  
-      errorEna             => errorEna, 
-      errorCode            => errorCode,
-      
-      fpscountOn           => fpscountOn, 
-      fpscountBCD          => fpscountBCD,
-      
-      VI_CTRL_TYPE         => VI_CTRL_TYPE,
-      VI_CTRL_SERRATE      => VI_CTRL_SERRATE,
-      VI_CTRL_GAMMA_ENABLE => VI_CTRL_GAMMA_ENABLE,
-      VI_ORIGIN            => VI_ORIGIN,   
-      VI_WIDTH             => VI_WIDTH,  
-      VI_X_SCALE_FACTOR    => VI_X_SCALE_FACTOR,
-      VI_X_SCALE_OFFSET    => VI_X_SCALE_OFFSET,
-      VI_Y_SCALE_FACTOR    => VI_Y_SCALE_FACTOR,
-      VI_Y_SCALE_OFFSET    => VI_Y_SCALE_OFFSET,
-      VI_V_VIDEO_START     => VI_V_VIDEO_START,
-      VI_V_VIDEO_END       => VI_V_VIDEO_END,  
-      VI_H_VIDEO_START     => VI_H_VIDEO_START,
-      VI_H_VIDEO_END       => VI_H_VIDEO_END,  
-      
-      newLine              => newLine,
-      VI_CURRENT           => VI_CURRENT,
-      
-      rdram_request        => rdram_request,   
-      rdram_rnw            => rdram_rnw,       
-      rdram_address        => rdram_address,   
-      rdram_burstcount     => rdram_burstcount,
-      rdram_granted        => rdram_granted,      
-      rdram_done           => rdram_done,  
-      ddr3_DOUT            => ddr3_DOUT,       
-      ddr3_DOUT_READY      => ddr3_DOUT_READY,       
-                           
-      video_hsync          => video_hsync, 
-      video_vsync          => video_vsync,  
-      video_hblank         => video_hblank, 
-      video_vblank         => video_vblank, 
-      video_ce             => video_ce,     
-      video_interlace      => video_interlace,     
-      video_r              => video_r,      
-      video_g              => video_g,      
-      video_b              => video_b,
-      
-      SS_VI_CURRENT        => unsigned(ss_in(1)(9 downto 0)),
-      SS_nextHCount        => unsigned(ss_in(6)(43 downto 32))
+      clk1x                            => clk1x,
+      clk2x                            => clk2x,
+      clkvid                           => clkvid,
+      ce                               => ce,
+      reset_1x                         => reset_1x,
+            
+      ISPAL                            => ISPAL,        
+      CROPBOTTOM                       => CROPBOTTOM,
+      VI_BILINEAROFF                   => VI_BILINEAROFF,
+      VI_GAMMAOFF                      => VI_GAMMAOFF,
+      VI_DEDITHEROFF                   => VI_DEDITHEROFF,
+      VI_AAOFF                         => VI_AAOFF,
+            
+      errorEna                         => errorEna, 
+      errorCode                        => errorCode,
+                  
+      fpscountOn                       => fpscountOn, 
+      fpscountBCD                      => fpscountBCD,
+                  
+      VI_CTRL_TYPE                     => VI_CTRL_TYPE,
+      VI_CTRL_AA_MODE                  => VI_CTRL_AA_MODE,
+      VI_CTRL_SERRATE                  => VI_CTRL_SERRATE,
+      VI_CTRL_GAMMA_ENABLE             => VI_CTRL_GAMMA_ENABLE,
+      VI_CTRL_DEDITHER_FILTER_ENABLE   => VI_CTRL_DEDITHER_FILTER_ENABLE,
+      VI_ORIGIN                        => VI_ORIGIN,   
+      VI_WIDTH                         => VI_WIDTH,  
+      VI_X_SCALE_FACTOR                => VI_X_SCALE_FACTOR,
+      VI_X_SCALE_OFFSET                => VI_X_SCALE_OFFSET,
+      VI_Y_SCALE_FACTOR                => VI_Y_SCALE_FACTOR,
+      VI_Y_SCALE_OFFSET                => VI_Y_SCALE_OFFSET,
+      VI_V_VIDEO_START                 => VI_V_VIDEO_START,
+      VI_V_VIDEO_END                   => VI_V_VIDEO_END,  
+      VI_H_VIDEO_START                 => VI_H_VIDEO_START,
+      VI_H_VIDEO_END                   => VI_H_VIDEO_END,  
+                  
+      newLine                          => newLine,
+      VI_CURRENT                       => VI_CURRENT,
+                  
+      rdram_request                    => rdram_request,   
+      rdram_rnw                        => rdram_rnw,       
+      rdram_address                    => rdram_address,   
+      rdram_burstcount                 => rdram_burstcount,
+      rdram_granted                    => rdram_granted,      
+      rdram_done                       => rdram_done,  
+      ddr3_DOUT                        => ddr3_DOUT,       
+      ddr3_DOUT_READY                  => ddr3_DOUT_READY,
+            
+      sdram_request                    => sdram_request,   
+      sdram_rnw                        => sdram_rnw,       
+      sdram_address                    => sdram_address,   
+      sdram_burstcount                 => sdram_burstcount,
+      sdram_granted                    => sdram_granted,   
+      sdram_done                       => sdram_done,      
+      sdram_dataRead                   => sdram_dataRead,  
+      sdram_valid                      => sdram_valid,     
+                                       
+      video_hsync                      => video_hsync, 
+      video_vsync                      => video_vsync,  
+      video_hblank                     => video_hblank, 
+      video_vblank                     => video_vblank, 
+      video_ce                         => video_ce,     
+      video_interlace                  => video_interlace,     
+      video_r                          => video_r,      
+      video_g                          => video_g,      
+      video_b                          => video_b,
+                  
+      SS_VI_CURRENT                    => unsigned(ss_in(1)(9 downto 0)),
+      SS_nextHCount                    => unsigned(ss_in(6)(43 downto 32))
    );
    
 --##############################################################

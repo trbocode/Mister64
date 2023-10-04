@@ -11,7 +11,8 @@ entity sdram_model is
       DOREFRESH         : std_logic := '0';
       INITFILE          : string := "NONE";
       SCRIPTLOADING     : std_logic := '0';
-      FILELOADING       : std_logic := '0'
+      FILELOADING       : std_logic := '0';
+      LOADRDRAM         : std_logic := '0'
    );
    port 
    (
@@ -189,7 +190,28 @@ begin
             file_close(infile);
          end if;
       end if;
-   
+      
+      
+      if (LOADRDRAM = '1') then
+         if (initFromFile = '1') then
+            initFromFile <= '0';
+            
+            file_open(f_status, infile, "R:\\RDRAM9_FPGN64.bin", read_mode);
+         
+            targetpos := 0;
+         
+            while (not endfile(infile)) loop
+               read(infile, next_vector, actual_len);  
+               read_byte := CONV_STD_LOGIC_VECTOR(bit'pos(next_vector(0)), 8);
+               data(targetpos) := to_integer(unsigned(read_byte));
+               targetpos       := targetpos + 1;
+            end loop;
+         
+            file_close(infile);
+            
+            report "RDRAM9 loaded";
+         end if;
+      end if;
    
    end process;
    

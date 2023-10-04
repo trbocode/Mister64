@@ -21,14 +21,16 @@ entity VI_lineProcess is
       
       fetchAddr          : out unsigned(9 downto 0) := (others => '0');
       fetchdata          : in  tfetchArray;
+      fetchAddr9         : out unsigned(9 downto 0) := (others => '0');
+      fetchdata9         : in  tfetchArray9;
       
       proc_pixel         : out std_logic := '0';
       proc_border        : out std_logic := '0';
       proc_x             : out unsigned(9 downto 0) := (others => '0');        
       proc_y             : out unsigned(9 downto 0) := (others => '0');
-      proc_pixel_Mid     : out tfetchelement;
-      proc_pixels_AA     : out tfetcharray_AA;
-      proc_pixels_DD     : out tfetcharray_DD
+      proc_pixel_Mid     : out tfetchelement := (others => (others => '0'));
+      proc_pixels_AA     : out tfetcharray_AA := (others => (others => (others => '0')));
+      proc_pixels_DD     : out tfetcharray_DD := (others => (others => (others => '0')))
    );
 end entity;
 
@@ -46,7 +48,8 @@ architecture arch of VI_lineProcess is
    signal cnt_x         : unsigned(9 downto 0) := (others => '0');        
    signal cnt_y         : unsigned(9 downto 0) := (others => '0');
    
-   signal firstword16   : std_logic := '0';     
+   signal firstword16   : std_logic := '0'; 
+   signal fetchAddr_1   : unsigned(2 downto 0);
    signal prefetch      : integer range 0 to 5 := 0;     
    
    signal fetchshift0   : tfetchshift := (others => (others => (others => '0')));
@@ -82,7 +85,7 @@ begin
             fetchArray(i).r <= fetchdata16(i)(15 downto 11) & "000";
             fetchArray(i).g <= fetchdata16(i)(10 downto  6) & "000";
             fetchArray(i).b <= fetchdata16(i)( 5 downto  1) & "000";
-            fetchArray(i).c <= fetchdata16(i)(0) & "00";
+            fetchArray(i).c <= fetchdata16(i)(0) & fetchdata9(i);
          end if;
          
       end loop;
@@ -131,6 +134,7 @@ begin
                   end if;
                   if (startProc = '1') then
                      fetchAddr   <= (others => '0');
+                     fetchAddr9  <= (others => '0');
                      firstword16 <= '1';
                      state       <= FETCH0;
                      cnt_x       <= (others => '0');    
@@ -143,6 +147,7 @@ begin
                   if (VI_CTRL_TYPE = "11" or firstword16 = '0') then
                      fetchAddr <= fetchAddr + 1;
                   end if;
+                  fetchAddr9 <= fetchAddr9 + 1;
                   
                when FETCH =>
                   for i in 0 to 3 loop
@@ -183,6 +188,7 @@ begin
                   if (VI_CTRL_TYPE = "11" or firstword16 = '1') then
                      fetchAddr <= fetchAddr + 1;
                   end if;
+                  fetchAddr9 <= fetchAddr9 + 1;
             
             end case;
             

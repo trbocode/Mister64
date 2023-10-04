@@ -13,6 +13,7 @@ vcom -2008 -quiet -work sim/n64 ^
 ../../rtl/VI_videoout_sync.vhd ^
 ../../rtl/VI_linefetch.vhd ^
 ../../rtl/VI_lineProcess.vhd ^
+../../rtl/VI_filter_pen.vhd ^
 ../../rtl/VI_filter.vhd ^
 ../../rtl/VI_gammatable.vhd ^
 ../../rtl/VI_outProcess.vhd ^

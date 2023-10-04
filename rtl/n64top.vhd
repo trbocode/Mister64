@@ -28,6 +28,8 @@ entity n64top is
       CROPBOTTOM              : in  unsigned(1 downto 0);
       VI_BILINEAROFF          : in  std_logic;
       VI_GAMMAOFF             : in  std_logic;
+      VI_DEDITHEROFF          : in  std_logic;
+      VI_AAOFF                : in  std_logic;
       
       CICTYPE                 : in  std_logic_vector(3 downto 0);
       RAMSIZE8                : in  std_logic;
@@ -717,7 +719,9 @@ begin
       CROPBOTTOM           => CROPBOTTOM,
       VI_BILINEAROFF       => VI_BILINEAROFF,
       VI_GAMMAOFF          => VI_GAMMAOFF,
-      
+      VI_DEDITHEROFF       => VI_DEDITHEROFF,
+      VI_AAOFF             => VI_AAOFF,
+     
       errorEna             => errorEna, 
       errorCode            => errorCode,
       fpscountOn           => fpscountOn,
@@ -730,6 +734,15 @@ begin
       rdram_done           => rdram_done(DDR3MUX_VI),     
       ddr3_DOUT            => ddr3_DOUT,       
       ddr3_DOUT_READY      => ddr3_DOUT_READY,       
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_VI),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_VI),       
+      sdram_address        => sdramMux_address(SDRAMMUX_VI),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_VI),
+      sdram_granted        => sdramMux_granted(SDRAMMUX_VI),      
+      sdram_done           => sdramMux_done(SDRAMMUX_VI),      
+      sdram_dataRead       => sdram_dataRead,
+      sdram_valid          => (sdram_done and sdram_rnw),   
       
       video_hsync          => video_hsync, 
       video_vsync          => video_vsync,  
@@ -1061,8 +1074,6 @@ begin
       rdpfifoZ_nearfull=> rdpfifoZ_nearfull,
       rdpfifoZ_empty   => rdpfifoZ_empty
    );
-   
-   sdramMux_request(SDRAMMUX_VI) <= '0';
    
    iSDRamMux : entity work.SDRamMux
    port map

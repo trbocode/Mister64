@@ -24,6 +24,7 @@ entity VI_linefetch is
       lineNr             : in  unsigned(8 downto 0);
       fetch              : in  std_logic;
       
+      addr9_offset       : out taddr9offset := (others => 0);
       startProc          : out std_logic := '0';
       procPtr            : out std_logic_vector(2 downto 0) := (others => '0');
       procDone           : in  std_logic;
@@ -38,7 +39,17 @@ entity VI_linefetch is
       rdram_done         : in  std_logic;
       ddr3_DOUT_READY    : in  std_logic;
       rdram_store        : out std_logic_vector(2 downto 0) := (others => '0');
-      rdram_storeAddr    : out unsigned(8 downto 0) := (others => '0')
+      rdram_storeAddr    : out unsigned(8 downto 0) := (others => '0');
+      
+      sdram_request      : out std_logic := '0';
+      sdram_rnw          : out std_logic := '0'; 
+      sdram_address      : out unsigned(26 downto 0):= (others => '0');
+      sdram_burstcount   : out unsigned(7 downto 0):= (others => '0');
+      sdram_granted      : in  std_logic;
+      sdram_done         : in  std_logic;
+      sdram_valid        : in  std_logic;
+      rdram9_store       : out std_logic_vector(2 downto 0) := (others => '0');
+      rdram9_storeAddr   : out unsigned(5 downto 0) := (others => '0')
    );
 end entity;
 
@@ -54,6 +65,8 @@ architecture arch of VI_linefetch is
    signal state            : tstate := IDLE;
    
    signal ram_offset       : signed(24 downto 0) := (others => '0');
+   signal rdram_finished   : std_logic := '0';
+   signal rdram9_finished  : std_logic := '0';
 
    signal lineAct          : unsigned(8 downto 0) := (others => '0');
    signal lineInPtr        : std_logic_vector(2 downto 0) := (others => '0');
@@ -79,12 +92,16 @@ begin
    y_diff        <= y_accu_new(y_accu_new'left downto 10) - y_accu(y_accu'left downto 10);
    
    rdram_rnw <= '1';
+   sdram_rnw <= '1';
+   
+   sdram_address <= 7x"0" & rdram_address(22 downto 5) & "00";
    
    process (clk1x)
    begin
       if rising_edge(clk1x) then
       
          rdram_request <= '0';
+         sdram_request <= '0';
          startProc     <= '0';
          startOut      <= '0';
          
@@ -100,6 +117,12 @@ begin
             else
                rdram_burstcount <= 10x"B0";
             end if;
+         end if;
+         
+         if (VI_X_SCALE_FACTOR > x"200") then -- hack for 320/640 pixel width
+            sdram_burstcount <= 8x"42";
+         else
+            sdram_burstcount <= 8x"22";
          end if;
          
          if (out_wait > 0) then
@@ -142,20 +165,35 @@ begin
                   end if;
                   
                when REQUESTLINE =>
-                  rdram_address <= ("0000" & VI_ORIGIN) + to_integer(ram_offset);
-                  ram_offset    <= ram_offset + to_integer(lineWidth);
+                  state           <= WAITDONE;
+                  rdram_address   <= to_unsigned(to_integer("0000" & VI_ORIGIN) + to_integer(ram_offset), rdram_address'length);
+                  ram_offset      <= ram_offset + to_integer(lineWidth);
+                  rdram_finished  <= '1';
+                  rdram9_finished <= '1';
+                  
                   if (VI_CTRL_TYPE = "10") then
-                     state            <= WAITDONE;
                      rdram_request    <= '1';
+                     sdram_request    <= '1';
+                     rdram_finished   <= '0';
+                     rdram9_finished  <= '0';
                   elsif (VI_CTRL_TYPE = "11") then
-                     state            <= WAITDONE;
                      rdram_request    <= '1';
-                  else 
-                     state <= IDLE;
+                     rdram_finished   <= '0';
                   end if;
                  
                when WAITDONE  => 
                   if (rdram_done = '1') then
+                     rdram_finished <= '1';
+                  end if;                  
+                  if (sdram_done = '1') then
+                     rdram9_finished <= '1';
+                  end if;
+                             
+                  if (lineInPtr(0) = '1') then addr9_offset(0) <= to_integer(rdram_address(4 downto 1) - 2); end if;
+                  if (lineInPtr(1) = '1') then addr9_offset(1) <= to_integer(rdram_address(4 downto 1) - 2); end if;
+                  if (lineInPtr(2) = '1') then addr9_offset(2) <= to_integer(rdram_address(4 downto 1) - 2); end if;
+                  
+                  if ((rdram_done = '1' or rdram_finished = '1') and (sdram_done = '1' or rdram9_finished = '1')) then
                      state          <= IDLE;
                      lineInPtr      <= lineInPtr(1 downto 0) & lineInPtr(2);   
                      lineInFetched  <= lineInFetched(1 downto 0) & '1';    
@@ -201,6 +239,26 @@ begin
           
           if (rdram_done = '1') then
             rdram_store  <= "000";
+          end if;
+
+      end if;
+   end process;
+   
+   process (clk1x)
+   begin
+      if rising_edge(clk1x) then
+      
+         if (sdram_granted = '1') then
+            rdram9_store       <= lineInPtr;
+            rdram9_storeAddr   <= (others => '0');
+         end if;
+         
+          if (sdram_valid = '1') then
+             rdram9_storeAddr <= rdram9_storeAddr + 1;
+          end if;
+          
+          if (sdram_done = '1') then
+            rdram9_store  <= "000";
           end if;
 
       end if;

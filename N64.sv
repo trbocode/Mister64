@@ -253,6 +253,8 @@ parameter CONF_STR = {
    "O[31],Dithering,On,Off;",
    "O[32],VI Bilinear,On,Off;",
    "O[33],VI Gamma,On,Off;",
+   "O[34],VI Dedither,On,Off;",
+   "O[35],VI Antialias,On,Off;",
    "-;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
@@ -602,6 +604,8 @@ n64top
    .CROPBOTTOM(status[45:44]),
    .VI_BILINEAROFF(status[32]),
    .VI_GAMMAOFF(status[33]),
+   .VI_DEDITHEROFF(status[34]),
+   .VI_AAOFF(status[35]),
    
    .CICTYPE(status[68:65]),
    .RAMSIZE8(~status[70]),

@@ -8,66 +8,79 @@ use work.pVI.all;
 entity VI_videoout is
    generic
    (
-      use2Xclock           : in  std_logic;
-      VITEST               : in  std_logic
-   );
-   port 
-   (
-      clk1x                : in  std_logic;
-      clk2x                : in  std_logic;
-      clkvid               : in  std_logic;
-      ce                   : in  std_logic;
-      reset_1x             : in  std_logic;
-      
-      ISPAL                : in  std_logic;
-      CROPBOTTOM           : in  unsigned(1 downto 0);
-      VI_BILINEAROFF       : in  std_logic;
-      VI_GAMMAOFF          : in  std_logic;
-      
-      errorEna             : in  std_logic;
-      errorCode            : in  unsigned(23 downto 0);
-      
-      fpscountOn           : in  std_logic;
-      fpscountBCD          : in  unsigned(7 downto 0);  
-      
-      VI_CTRL_TYPE         : in unsigned(1 downto 0);
-      VI_CTRL_SERRATE      : in std_logic;
-      VI_CTRL_GAMMA_ENABLE : in std_logic;
-      VI_ORIGIN            : in unsigned(23 downto 0);
-      VI_WIDTH             : in unsigned(11 downto 0);
-      VI_X_SCALE_FACTOR    : in unsigned(11 downto 0);
-      VI_X_SCALE_OFFSET    : in unsigned(11 downto 0);
-      VI_Y_SCALE_FACTOR    : in unsigned(11 downto 0);
-      VI_Y_SCALE_OFFSET    : in unsigned(11 downto 0);
-      VI_V_VIDEO_START     : in unsigned(9 downto 0);
-      VI_V_VIDEO_END       : in unsigned(9 downto 0);
-      VI_H_VIDEO_START     : in unsigned(9 downto 0);
-      VI_H_VIDEO_END       : in unsigned(9 downto 0);
-      
-      newLine              : out std_logic;
-      VI_CURRENT           : out unsigned(9 downto 0);
-      
-      rdram_request        : out std_logic := '0';
-      rdram_rnw            : out std_logic := '0'; 
-      rdram_address        : out unsigned(27 downto 0):= (others => '0');
-      rdram_burstcount     : out unsigned(9 downto 0):= (others => '0');
-      rdram_granted        : in  std_logic;
-      rdram_done           : in  std_logic;
-      ddr3_DOUT            : in  std_logic_vector(63 downto 0);
-      ddr3_DOUT_READY      : in  std_logic;
-        
-      video_hsync          : out std_logic := '0';
-      video_vsync          : out std_logic := '0';
-      video_hblank         : out std_logic := '0';
-      video_vblank         : out std_logic := '0';
-      video_ce             : out std_logic;
-      video_interlace      : out std_logic;
-      video_r              : out std_logic_vector(7 downto 0);
-      video_g              : out std_logic_vector(7 downto 0);
-      video_b              : out std_logic_vector(7 downto 0);
-      
-      SS_VI_CURRENT        : in unsigned(9 downto 0);
-      SS_nextHCount        : in unsigned(11 downto 0)
+      use2Xclock                       : in  std_logic;
+      VITEST                           : in  std_logic
+   );          
+   port           
+   (           
+      clk1x                            : in  std_logic;
+      clk2x                            : in  std_logic;
+      clkvid                           : in  std_logic;
+      ce                               : in  std_logic;
+      reset_1x                         : in  std_logic;
+                  
+      ISPAL                            : in  std_logic;
+      CROPBOTTOM                       : in  unsigned(1 downto 0);
+      VI_BILINEAROFF                   : in  std_logic;
+      VI_GAMMAOFF                      : in  std_logic;
+      VI_DEDITHEROFF                   : in  std_logic;
+      VI_AAOFF                         : in  std_logic;
+                  
+      errorEna                         : in  std_logic;
+      errorCode                        : in  unsigned(23 downto 0);
+                  
+      fpscountOn                       : in  std_logic;
+      fpscountBCD                      : in  unsigned(7 downto 0);  
+                  
+      VI_CTRL_TYPE                     : in unsigned(1 downto 0);
+      VI_CTRL_AA_MODE                  : in unsigned(1 downto 0);
+      VI_CTRL_SERRATE                  : in std_logic;
+      VI_CTRL_GAMMA_ENABLE             : in std_logic;
+      VI_CTRL_DEDITHER_FILTER_ENABLE   : in std_logic;
+      VI_ORIGIN                        : in unsigned(23 downto 0);
+      VI_WIDTH                         : in unsigned(11 downto 0);
+      VI_X_SCALE_FACTOR                : in unsigned(11 downto 0);
+      VI_X_SCALE_OFFSET                : in unsigned(11 downto 0);
+      VI_Y_SCALE_FACTOR                : in unsigned(11 downto 0);
+      VI_Y_SCALE_OFFSET                : in unsigned(11 downto 0);
+      VI_V_VIDEO_START                 : in unsigned(9 downto 0);
+      VI_V_VIDEO_END                   : in unsigned(9 downto 0);
+      VI_H_VIDEO_START                 : in unsigned(9 downto 0);
+      VI_H_VIDEO_END                   : in unsigned(9 downto 0);
+                  
+      newLine                          : out std_logic;
+      VI_CURRENT                       : out unsigned(9 downto 0);
+                  
+      rdram_request                    : out std_logic := '0';
+      rdram_rnw                        : out std_logic := '0'; 
+      rdram_address                    : out unsigned(27 downto 0):= (others => '0');
+      rdram_burstcount                 : out unsigned(9 downto 0):= (others => '0');
+      rdram_granted                    : in  std_logic;
+      rdram_done                       : in  std_logic;
+      ddr3_DOUT                        : in  std_logic_vector(63 downto 0);
+      ddr3_DOUT_READY                  : in  std_logic;
+                  
+      sdram_request                    : out std_logic := '0';
+      sdram_rnw                        : out std_logic := '0'; 
+      sdram_address                    : out unsigned(26 downto 0):= (others => '0');
+      sdram_burstcount                 : out unsigned(7 downto 0):= (others => '0');
+      sdram_granted                    : in  std_logic;
+      sdram_done                       : in  std_logic;
+      sdram_dataRead                   : in  std_logic_vector(31 downto 0);
+      sdram_valid                      : in  std_logic;
+                  
+      video_hsync                      : out std_logic := '0';
+      video_vsync                      : out std_logic := '0';
+      video_hblank                     : out std_logic := '0';
+      video_vblank                     : out std_logic := '0';
+      video_ce                         : out std_logic;
+      video_interlace                  : out std_logic;
+      video_r                          : out std_logic_vector(7 downto 0);
+      video_g                          : out std_logic_vector(7 downto 0);
+      video_b                          : out std_logic_vector(7 downto 0);
+                  
+      SS_VI_CURRENT                    : in unsigned(9 downto 0);
+      SS_nextHCount                    : in unsigned(11 downto 0)
    );
 end entity;
 
@@ -102,8 +115,12 @@ architecture arch of VI_videoout is
 
    -- processing
    signal rdram_storeAddr     : unsigned(8 downto 0);
-   signal rdram_store         : std_logic_vector(2 downto 0);
+   signal rdram_store         : std_logic_vector(2 downto 0);   
    
+   signal rdram9_storeAddr    : unsigned(5 downto 0);
+   signal rdram9_store        : std_logic_vector(2 downto 0);
+   
+   signal addr9_offset        : taddr9offset;
    signal startProc           : std_logic; 
    signal procPtr             : std_logic_vector(2 downto 0);
    signal procDone            : std_logic; 
@@ -111,9 +128,13 @@ architecture arch of VI_videoout is
    signal fracYout            : unsigned(4 downto 0);
    
    signal fetchAddr           : unsigned(9 downto 0);
+   signal fetchAddr9          : unsigned(9 downto 0);
    type tfetchDataArray is array(0 to 2) of std_logic_vector(31 downto 0);
-   signal fetchDataArray : tfetchDataArray;
+   signal fetchDataArray      : tfetchDataArray;
    signal fetchdata           : tfetchArray;
+   type tfetchDataArray9 is array(0 to 2) of std_logic_vector(1 downto 0);
+   signal fetchDataArray9     : tfetchDataArray9;
+   signal fetchdata9          : tfetchArray9;
                               
    signal proc_pixel          : std_logic;
    signal proc_border         : std_logic;
@@ -201,6 +222,7 @@ begin
       lineNr             => videoout_request.lineInNext,
       fetch              => videoout_request.fetch,
       
+      addr9_offset       => addr9_offset,
       startProc          => startProc,
       procPtr            => procPtr,
       procDone           => procDone,
@@ -215,10 +237,21 @@ begin
       rdram_done         => rdram_done,      
       ddr3_DOUT_READY    => ddr3_DOUT_READY, 
       rdram_store        => rdram_store,     
-      rdram_storeAddr    => rdram_storeAddr
+      rdram_storeAddr    => rdram_storeAddr,
+      
+      sdram_request      => sdram_request,    
+      sdram_rnw          => sdram_rnw,        
+      sdram_address      => sdram_address,    
+      sdram_burstcount   => sdram_burstcount, 
+      sdram_granted      => sdram_granted,    
+      sdram_done         => sdram_done,       
+      sdram_valid        => sdram_valid,      
+      rdram9_store       => rdram9_store,     
+      rdram9_storeAddr   => rdram9_storeAddr
    );
    
    glinerams: for i in 0 to 2 generate
+      signal addr9_corrected : unsigned(9 downto 0);
    begin
       ilineram: entity mem.dpram_dif
       generic map 
@@ -241,6 +274,30 @@ begin
          wren_b      => '0',
          q_b         => fetchDataArray(i)
       );   
+      
+      addr9_corrected <= fetchAddr9 + addr9_offset(i);
+      
+      ilineram9: entity mem.dpram_dif
+      generic map 
+      ( 
+         addr_width_a  => 6,
+         data_width_a  => 32,
+         addr_width_b  => 10,
+         data_width_b  => 2
+      )
+      port map
+      (
+         clock_a     => clk1x,
+         address_a   => std_logic_vector(rdram9_storeAddr),
+         data_a      => sdram_dataRead,
+         wren_a      => (sdram_valid and rdram9_store(i)),
+         
+         clock_b     => clk1x,
+         address_b   => std_logic_vector(addr9_corrected),
+         data_b      => 2x"0",
+         wren_b      => '0',
+         q_b         => fetchDataArray9(i)
+      );   
    end generate;
    
    fetchdata(0) <= unsigned(fetchDataArray(0)) when (procPtr(2) = '1') else
@@ -254,6 +311,18 @@ begin
    fetchdata(2) <= unsigned(fetchDataArray(2)) when (procPtr(2) = '1') else
                    unsigned(fetchDataArray(0)) when (procPtr(0) = '1') else
                    unsigned(fetchDataArray(1));
+   
+   fetchdata9(0) <= unsigned(fetchDataArray9(0)) when (procPtr(2) = '1') else
+                    unsigned(fetchDataArray9(1)) when (procPtr(0) = '1') else
+                    unsigned(fetchDataArray9(2));
+                 
+   fetchdata9(1) <= unsigned(fetchDataArray9(1)) when (procPtr(2) = '1') else
+                    unsigned(fetchDataArray9(2)) when (procPtr(0) = '1') else
+                    unsigned(fetchDataArray9(0));
+              
+   fetchdata9(2) <= unsigned(fetchDataArray9(2)) when (procPtr(2) = '1') else
+                    unsigned(fetchDataArray9(0)) when (procPtr(0) = '1') else
+                    unsigned(fetchDataArray9(1));
    
    iVI_lineProcess : entity work.VI_lineProcess
    port map
@@ -270,6 +339,8 @@ begin
                          
       fetchAddr          => fetchAddr,     
       fetchdata          => fetchdata,
+      fetchAddr9         => fetchAddr9,
+      fetchdata9         => fetchdata9,
                          
       proc_pixel         => proc_pixel,    
       proc_border        => proc_border,    
@@ -283,21 +354,27 @@ begin
    iVI_filter: entity work.VI_filter
    port map
    (
-      clk1x             => clk1x, 
-      reset             => reset_1x,
+      clk1x                            => clk1x, 
+      reset                            => reset_1x,
+      
+      VI_DEDITHEROFF                   => VI_DEDITHEROFF,
+      VI_AAOFF                         => VI_AAOFF,
+      
+      VI_CTRL_AA_MODE                  => VI_CTRL_AA_MODE,
+      VI_CTRL_DEDITHER_FILTER_ENABLE   => VI_CTRL_DEDITHER_FILTER_ENABLE,
                     
-      proc_pixel        => proc_pixel,    
-      proc_border       => proc_border,    
-      proc_x            => proc_x,         
-      proc_y            => proc_y,        
-      proc_pixel_Mid    => proc_pixel_Mid,
-      proc_pixels_AA    => proc_pixels_AA,
-      proc_pixels_DD    => proc_pixels_DD,
-         
-      filter_pixel      => filter_pixel,
-      filter_x_out      => filter_x_out, 
-      filter_y_out      => filter_y_out, 
-      filter_color      => filter_color
+      proc_pixel                       => proc_pixel,    
+      proc_border                      => proc_border,    
+      proc_x                           => proc_x,         
+      proc_y                           => proc_y,        
+      proc_pixel_Mid                   => proc_pixel_Mid,
+      proc_pixels_AA                   => proc_pixels_AA,
+      proc_pixels_DD                   => proc_pixels_DD,
+                        
+      filter_pixel                     => filter_pixel,
+      filter_x_out                     => filter_x_out, 
+      filter_y_out                     => filter_y_out, 
+      filter_color                     => filter_color
    );
    
    filterram_addr_A <= filter_y_out(0) & std_logic_vector(filter_x_out);
