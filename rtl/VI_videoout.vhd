@@ -18,16 +18,20 @@ entity VI_videoout is
       clkvid                           : in  std_logic;
       ce                               : in  std_logic;
       reset_1x                         : in  std_logic;
+      
+      error_vi                         : out std_logic;
                   
       ISPAL                            : in  std_logic;
       CROPBOTTOM                       : in  unsigned(1 downto 0);
       VI_BILINEAROFF                   : in  std_logic;
       VI_GAMMAOFF                      : in  std_logic;
+      VI_NOISEOFF                      : in  std_logic;
       VI_DEDITHEROFF                   : in  std_logic;
       VI_AAOFF                         : in  std_logic;
+      VI_DIVOTOFF                      : in  std_logic;
                   
       errorEna                         : in  std_logic;
-      errorCode                        : in  unsigned(23 downto 0);
+      errorCode                        : in  unsigned(27 downto 0);
                   
       fpscountOn                       : in  std_logic;
       fpscountBCD                      : in  unsigned(7 downto 0);  
@@ -36,6 +40,8 @@ entity VI_videoout is
       VI_CTRL_AA_MODE                  : in unsigned(1 downto 0);
       VI_CTRL_SERRATE                  : in std_logic;
       VI_CTRL_GAMMA_ENABLE             : in std_logic;
+      VI_CTRL_GAMMA_DITHER_ENABLE      : in std_logic;
+      VI_CTRL_DIVOT_ENABLE             : in std_logic;
       VI_CTRL_DEDITHER_FILTER_ENABLE   : in std_logic;
       VI_ORIGIN                        : in unsigned(23 downto 0);
       VI_WIDTH                         : in unsigned(11 downto 0);
@@ -114,6 +120,9 @@ architecture arch of VI_videoout is
    signal videoout_request        : tvideoout_request;  
 
    -- processing
+   signal error_linefetch     : std_logic;
+   signal error_outProcess    : std_logic;
+   
    signal rdram_storeAddr     : unsigned(8 downto 0);
    signal rdram_store         : std_logic_vector(2 downto 0);   
    
@@ -125,6 +134,7 @@ architecture arch of VI_videoout is
    signal procPtr             : std_logic_vector(2 downto 0);
    signal procDone            : std_logic; 
    signal startOut            : std_logic; 
+   signal outprocIdle         : std_logic; 
    signal fracYout            : unsigned(4 downto 0);
    
    signal fetchAddr           : unsigned(9 downto 0);
@@ -176,11 +186,13 @@ architecture arch of VI_videoout is
    signal overlay_fps_data    : std_logic_vector(23 downto 0);
    signal overlay_fps_ena     : std_logic;
    
-   signal errortext           : unsigned(47 downto 0);
+   signal errortext           : unsigned(55 downto 0);
    signal overlay_error_data  : std_logic_vector(23 downto 0);
    signal overlay_error_ena   : std_logic;   
    
 begin 
+
+   error_vi             <= error_outProcess or error_linefetch;
   
    video_hsync          <= videoout_out.hsync;         
    video_vsync          <= videoout_out.vsync;         
@@ -208,7 +220,9 @@ begin
    (
       clk1x              => clk1x,              
       clk2x              => clk2x,              
-      reset              => reset_1x,           
+      reset              => reset_1x,    
+
+      error_linefetch    => error_linefetch,
                                         
       VI_CTRL_TYPE       => VI_CTRL_TYPE,     
       VI_CTRL_SERRATE    => VI_CTRL_SERRATE,  
@@ -226,6 +240,8 @@ begin
       startProc          => startProc,
       procPtr            => procPtr,
       procDone           => procDone,
+      
+      outprocIdle        => outprocIdle,
       startOut           => startOut,
       fracYout           => fracYout,
       
@@ -359,9 +375,11 @@ begin
       
       VI_DEDITHEROFF                   => VI_DEDITHEROFF,
       VI_AAOFF                         => VI_AAOFF,
+      VI_DIVOTOFF                      => VI_DIVOTOFF,
       
       VI_CTRL_AA_MODE                  => VI_CTRL_AA_MODE,
       VI_CTRL_DEDITHER_FILTER_ENABLE   => VI_CTRL_DEDITHER_FILTER_ENABLE,
+      VI_CTRL_DIVOT_ENABLE             => VI_CTRL_DIVOT_ENABLE,
                     
       proc_pixel                       => proc_pixel,    
       proc_border                      => proc_border,    
@@ -405,31 +423,37 @@ begin
    iVI_outProcess : entity work.VI_outProcess
    port map
    (
-      clk1x                   => clk1x,           
-      reset                   => reset_1x,        
-      
-      ISPAL                   => ISPAL,
-      VI_BILINEAROFF          => VI_BILINEAROFF,
-      VI_GAMMAOFF             => VI_GAMMAOFF,
-                        
-      VI_CTRL_GAMMA_ENABLE    => VI_CTRL_GAMMA_ENABLE,
-      VI_H_VIDEO_START        => VI_H_VIDEO_START,
-      VI_H_VIDEO_END          => VI_H_VIDEO_END,  
-      VI_X_SCALE_FACTOR       => VI_X_SCALE_FACTOR,
-      VI_X_SCALE_OFFSET       => VI_X_SCALE_OFFSET,
+      clk1x                         => clk1x,           
+      reset                         => reset_1x,        
+            
+      error_outProcess              => error_outProcess,
+            
+      ISPAL                         => ISPAL,
+      VI_BILINEAROFF                => VI_BILINEAROFF,
+      VI_GAMMAOFF                   => VI_GAMMAOFF,
+      VI_NOISEOFF                   => VI_NOISEOFF,
+      VI_CTRL_AA_MODE               => VI_CTRL_AA_MODE,
                               
-      newFrame                => videoout_reports.newFrame,             
-      startOut                => startOut,        
-      fracYout                => fracYout,        
-                              
-      filter_y                => filter_y_out(0),
-      filterAddr              => filterAddr,      
-      filterData              => unsigned(filterram_do_B),      
-                              
-      out_pixel               => out_pixel,       
-      out_x                   => out_x,               
-      out_y                   => out_y,           
-      out_color               => out_color       
+      VI_CTRL_GAMMA_ENABLE          => VI_CTRL_GAMMA_ENABLE,
+      VI_CTRL_GAMMA_DITHER_ENABLE   => VI_CTRL_GAMMA_DITHER_ENABLE,
+      VI_H_VIDEO_START              => VI_H_VIDEO_START,
+      VI_H_VIDEO_END                => VI_H_VIDEO_END,  
+      VI_X_SCALE_FACTOR             => VI_X_SCALE_FACTOR,
+      VI_X_SCALE_OFFSET             => VI_X_SCALE_OFFSET,
+                                    
+      newFrame                      => videoout_reports.newFrame,             
+      startOut                      => startOut,        
+      fracYout                      => fracYout,        
+      outprocIdle                   => outprocIdle,        
+                                    
+      filter_y                      => filter_y_out(0),
+      filterAddr                    => filterAddr,      
+      filterData                    => unsigned(filterram_do_B),      
+                                    
+      out_pixel                     => out_pixel,       
+      out_x                         => out_x,               
+      out_y                         => out_y,           
+      out_color                     => out_color       
    );
    
    outram_addr_A <= out_y(0) & std_logic_vector(out_x);
@@ -507,7 +531,8 @@ begin
    errortext(31 downto 24) <= resize(errorCode(15 downto 12), 8) + 16#30# when (errorCode(15 downto 12) < 10) else resize(errorCode(15 downto 12), 8) + 16#37#;
    errortext(39 downto 32) <= resize(errorCode(19 downto 16), 8) + 16#30# when (errorCode(19 downto 16) < 10) else resize(errorCode(19 downto 16), 8) + 16#37#;
    errortext(47 downto 40) <= resize(errorCode(23 downto 20), 8) + 16#30# when (errorCode(23 downto 20) < 10) else resize(errorCode(23 downto 20), 8) + 16#37#;
-   ioverlayError : entity work.VI_overlay generic map (7, 4, 44, x"0000FF")
+   errortext(55 downto 48) <= resize(errorCode(27 downto 24), 8) + 16#30# when (errorCode(27 downto 24) < 10) else resize(errorCode(27 downto 24), 8) + 16#37#;
+   ioverlayError : entity work.VI_overlay generic map (8, 4, 44, x"0000FF")
    port map
    (
       clk                    => clk1x,

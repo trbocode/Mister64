@@ -236,9 +236,9 @@ parameter CONF_STR = {
 	"D0R[41],Save Backup RAM;",
 	"D0O[42],Autosave,On,Off;",
    //"-;",
-	//"O[36],Savestates to SDCard,On,Off;",
+	//"O[46],Savestates to SDCard,On,Off;",
 	//"O[3],Autoincrement Slot,Off,On;",
-	//"O[38:37],Savestate Slot,1,2,3,4;",
+	//"O[39:38],Savestate Slot,1,2,3,4;",
 	//"RH,Save state (Alt-F1);",
 	//"RI,Restore state (F1);",
 	"-;",
@@ -255,6 +255,8 @@ parameter CONF_STR = {
    "O[33],VI Gamma,On,Off;",
    "O[34],VI Dedither,On,Off;",
    "O[35],VI Antialias,On,Off;",
+   "O[36],VI Divot,On,Off;",
+   "O[37],VI Noisedither,On,Off;",
    "-;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
@@ -327,7 +329,7 @@ wire [15:0] joystick_analog_l3;
 
 wire [10:0] ps2_key;
 
-wire [127:0] status_in = {status[127:39],ss_slot,status[36:0]};
+wire [127:0] status_in = {status[127:40],ss_slot,status[37:0]};
 wire [15:0] status_menumask = 16'd0;
 
 wire DIRECT_VIDEO;
@@ -484,6 +486,7 @@ wire [26:0] sdram_Adr;
 wire  [3:0] sdram_be;
 wire [31:0] sdram_dataWrite;
 wire        sdram_done;  
+wire        sdram_reqprocessed;  
 wire [31:0] sdram_dataRead;
 
 sdram sdram
@@ -499,6 +502,7 @@ sdram sdram
 	.ch1_rnw(sdram_rnw),
 	.ch1_be(sdram_be),
 	.ch1_ready(sdram_done),
+	.ch1_reqprocessed(sdram_reqprocessed),
 
 	.ch2_addr (ramdownload_wraddr),
 	.ch2_din  (ramdownload_wrdata),
@@ -535,7 +539,7 @@ savestate_ui savestate_ui
 	.joyUp          (joy_unmod[3]  ),
 	.joyRewind      (0             ),
 	.rewindEnable   (0             ), 
-	.status_slot    (status[38:37] ),
+	.status_slot    (status[39:38] ),
 	.autoincslot    (status[3]     ),
 	.OSD_saveload   (status[18:17] ),
 	.ss_save        (ss_save       ),
@@ -606,6 +610,8 @@ n64top
    .VI_GAMMAOFF(status[33]),
    .VI_DEDITHEROFF(status[34]),
    .VI_AAOFF(status[35]),
+   .VI_DIVOTOFF(status[36]),
+   .VI_NOISEOFF(status[37]),
    
    .CICTYPE(status[68:65]),
    .RAMSIZE8(~status[70]),
@@ -623,37 +629,38 @@ n64top
    .readZ(!status[15]),
    
    // savestates              
-   .increaseSSHeaderCount (!status[36]),
+   .increaseSSHeaderCount (!status[46]),
    .save_state            (0), //(ss_save),
    .load_state            (ss_load),
    .savestate_number      (ss_slot),
    .state_loaded          (),
    
    // PIFROM download port
-   .pifrom_wraddress (pifrom_wraddress),
-   .pifrom_wrdata    (pifrom_wrdata   ),
-   .pifrom_wren      (pifrom_wren     ),
-   
-   // RDRAM
-   .ddr3_BUSY        (DDRAM_BUSY      ),
-   .ddr3_BURSTCNT    (DDRAM_BURSTCNT  ),
-   .ddr3_ADDR        (DDRAM_ADDR      ),
-   .ddr3_DOUT        (DDRAM_DOUT      ),
-   .ddr3_DOUT_READY  (DDRAM_DOUT_READY),
-   .ddr3_RD          (DDRAM_RD        ),
-   .ddr3_DIN         (DDRAM_DIN       ),
-   .ddr3_BE          (DDRAM_BE        ),
-   .ddr3_WE          (DDRAM_WE        ),
-   
-   // ROM+SRAM+FLASH
-   .cartAvailable    (cart_loaded    ),
-   .sdram_ena        (sdram_ena      ),
-   .sdram_rnw        (sdram_rnw      ),
-   .sdram_Adr        (sdram_Adr      ),
-   .sdram_be         (sdram_be       ),
-   .sdram_dataWrite  (sdram_dataWrite),
-   .sdram_done       (sdram_done     ),
-   .sdram_dataRead   (sdram_dataRead ),
+   .pifrom_wraddress  (pifrom_wraddress),
+   .pifrom_wrdata     (pifrom_wrdata   ),
+   .pifrom_wren       (pifrom_wren     ),
+                      
+   // RDRAM           
+   .ddr3_BUSY         (DDRAM_BUSY      ),
+   .ddr3_BURSTCNT     (DDRAM_BURSTCNT  ),
+   .ddr3_ADDR         (DDRAM_ADDR      ),
+   .ddr3_DOUT         (DDRAM_DOUT      ),
+   .ddr3_DOUT_READY   (DDRAM_DOUT_READY),
+   .ddr3_RD           (DDRAM_RD        ),
+   .ddr3_DIN          (DDRAM_DIN       ),
+   .ddr3_BE           (DDRAM_BE        ),
+   .ddr3_WE           (DDRAM_WE        ),
+                      
+   // ROM+SRAM+FLASH  
+   .cartAvailable     (cart_loaded       ),
+   .sdram_ena         (sdram_ena         ),
+   .sdram_rnw         (sdram_rnw         ),
+   .sdram_Adr         (sdram_Adr         ),
+   .sdram_be          (sdram_be          ),
+   .sdram_dataWrite   (sdram_dataWrite   ),
+   .sdram_reqprocessed(sdram_reqprocessed),
+   .sdram_done        (sdram_done        ),
+   .sdram_dataRead    (sdram_dataRead    ),
       
    // pad
    .PADCOUNT         (3'd3),//(status[59:58]),

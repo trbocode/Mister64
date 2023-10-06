@@ -139,7 +139,7 @@ begin
                      state       <= FETCH0;
                      cnt_x       <= (others => '0');    
                      prefetch    <= 5;
-                     proc_border <= '1';
+                     proc_border <= '0';
                   end if;
             
                when FETCH0 =>
@@ -171,9 +171,6 @@ begin
                      proc_pixel  <= '1';
                      proc_x      <= cnt_x;
                      proc_y      <= cnt_y;
-                     if (cnt_x = 1) then
-                        proc_border <= '0';
-                     end if;
                      
                      cnt_x       <= cnt_x + 1;
                      if (lineEnd = '1') then

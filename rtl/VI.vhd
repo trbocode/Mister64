@@ -18,6 +18,8 @@ entity VI is
       ce               : in  std_logic;
       reset_1x         : in  std_logic;
       
+      error_vi         : out std_logic;
+      
       irq_out          : out std_logic := '0';
       
       second_ena       : out std_logic := '0';
@@ -26,11 +28,13 @@ entity VI is
       CROPBOTTOM       : in  unsigned(1 downto 0);
       VI_BILINEAROFF   : in  std_logic;
       VI_GAMMAOFF      : in  std_logic;
+      VI_NOISEOFF      : in  std_logic;
       VI_DEDITHEROFF   : in  std_logic;
       VI_AAOFF         : in  std_logic;
+      VI_DIVOTOFF      : in  std_logic;
       
       errorEna         : in  std_logic;
-      errorCode        : in  unsigned(23 downto 0);
+      errorCode        : in  unsigned(27 downto 0);
       fpscountOn       : in  std_logic;
       
       rdram_request    : out std_logic := '0';
@@ -332,12 +336,16 @@ begin
       ce                               => ce,
       reset_1x                         => reset_1x,
             
+      error_vi                         => error_vi,
+            
       ISPAL                            => ISPAL,        
       CROPBOTTOM                       => CROPBOTTOM,
       VI_BILINEAROFF                   => VI_BILINEAROFF,
       VI_GAMMAOFF                      => VI_GAMMAOFF,
+      VI_NOISEOFF                      => VI_NOISEOFF,
       VI_DEDITHEROFF                   => VI_DEDITHEROFF,
       VI_AAOFF                         => VI_AAOFF,
+      VI_DIVOTOFF                      => VI_DIVOTOFF,
             
       errorEna                         => errorEna, 
       errorCode                        => errorCode,
@@ -349,6 +357,8 @@ begin
       VI_CTRL_AA_MODE                  => VI_CTRL_AA_MODE,
       VI_CTRL_SERRATE                  => VI_CTRL_SERRATE,
       VI_CTRL_GAMMA_ENABLE             => VI_CTRL_GAMMA_ENABLE,
+      VI_CTRL_GAMMA_DITHER_ENABLE      => VI_CTRL_GAMMA_DITHER_ENABLE,
+      VI_CTRL_DIVOT_ENABLE             => VI_CTRL_DIVOT_ENABLE,
       VI_CTRL_DEDITHER_FILTER_ENABLE   => VI_CTRL_DEDITHER_FILTER_ENABLE,
       VI_ORIGIN                        => VI_ORIGIN,   
       VI_WIDTH                         => VI_WIDTH,  

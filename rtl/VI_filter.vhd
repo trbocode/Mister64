@@ -15,9 +15,11 @@ entity VI_filter is
       
       VI_DEDITHEROFF                   : in  std_logic;
       VI_AAOFF                         : in  std_logic;
+      VI_DIVOTOFF                      : in  std_logic;
       
       VI_CTRL_AA_MODE                  : in  unsigned(1 downto 0);
       VI_CTRL_DEDITHER_FILTER_ENABLE   : in  std_logic;
+      VI_CTRL_DIVOT_ENABLE             : in  std_logic;
       
       proc_pixel                       : in  std_logic;
       proc_border                      : in  std_logic;
@@ -76,6 +78,21 @@ architecture arch of VI_filter is
    signal stage0_x         : unsigned(9 downto 0) := (others => '0');        
    signal stage0_y         : unsigned(9 downto 0) := (others => '0');
    signal stage0_Mid       : tfetchelement := (others => (others => '0'));
+   
+   signal stage1_ena       : std_logic := '0';
+   signal stage1_border    : std_logic := '0';
+   signal stage1_x         : unsigned(9 downto 0) := (others => '0');        
+   signal stage1_y         : unsigned(9 downto 0) := (others => '0');
+   signal stage1_Pix       : tfetchelement := (others => (others => '0'));   
+   
+   signal stage2_ena       : std_logic := '0';
+   signal stage2_border    : std_logic := '0';
+   signal stage2_x         : unsigned(9 downto 0) := (others => '0');        
+   signal stage2_y         : unsigned(9 downto 0) := (others => '0');
+   signal stage2_Pix       : tfetchelement := (others => (others => '0'));
+   
+   signal stage3_ena       : std_logic := '0';
+   signal stage3_Pix       : tfetchelement := (others => (others => '0'));
    
 begin 
 
@@ -152,6 +169,10 @@ begin
    
    
    process (clk1x)
+      variable color_0 : tcolor;
+      variable color_1 : tcolor;
+      variable color_2 : tcolor;
+      variable median  : tcolor;
    begin
       if rising_edge(clk1x) then
       
@@ -172,22 +193,81 @@ begin
          inv_c <= to_unsigned(7, 3) - proc_pixel_Mid.c;
          
          -- stage 1
-         filter_pixel <= stage0_ena;
-         filter_x_out <= stage0_x;
-         filter_y_out <= stage0_y;
-         filter_color <= stage0_Mid;
-         if (stage0_border = '1') then
-            filter_color <= (others => (others => '0'));
-         elsif (stage0_Mid.c = 7 and VI_CTRL_DEDITHER_FILTER_ENABLE = '1' and VI_DEDITHEROFF = '0') then
-            filter_color.r <= dedither_out(0);
-            filter_color.g <= dedither_out(1);
-            filter_color.b <= dedither_out(2);
+         stage1_ena    <= stage0_ena;
+         stage1_border <= stage0_border;
+         stage1_x      <= stage0_x;
+         stage1_y      <= stage0_y;
+         stage1_Pix  <= stage0_Mid;
+         if (stage0_Mid.c = 7 and VI_CTRL_DEDITHER_FILTER_ENABLE = '1' and VI_DEDITHEROFF = '0') then
+            stage1_Pix.r <= dedither_out(0);
+            stage1_Pix.g <= dedither_out(1);
+            stage1_Pix.b <= dedither_out(2);
          elsif (stage0_Mid.c < 7 and VI_CTRL_AA_MODE(1) = '0' and VI_AAOFF = '0') then
-            filter_color.r <= AA_result(0);
-            filter_color.g <= AA_result(1);
-            filter_color.b <= AA_result(2);
+            stage1_Pix.r <= AA_result(0);
+            stage1_Pix.g <= AA_result(1);
+            stage1_Pix.b <= AA_result(2);
          end if;
-   
+         
+         -- stage 2
+         stage2_ena    <= stage1_ena;
+         stage2_border <= stage1_border;
+         stage2_x      <= stage1_x;     
+         stage2_y      <= stage1_y;     
+         stage2_Pix    <= stage1_Pix;   
+         
+         -- stage 3   
+         stage3_ena    <= stage2_ena and (not stage2_border);
+         stage3_Pix    <= stage2_Pix;   
+         
+         -- output + divot
+         filter_pixel <= stage3_ena;
+         filter_x_out <= stage2_x;
+         filter_y_out <= stage2_y;
+         filter_color <= stage2_Pix;
+         if (stage2_border = '1') then
+            filter_color <= (others => (others => '0'));
+         elsif (VI_CTRL_DIVOT_ENABLE = '1' and VI_DIVOTOFF = '0' and (stage1_Pix.c /= 7 or stage2_Pix.c /= 7 or stage3_Pix.c /= 7)) then
+            color_2(0) := stage1_Pix.r;
+            color_2(1) := stage1_Pix.g;
+            color_2(2) := stage1_Pix.b;
+            
+            color_1(0) := stage2_Pix.r;
+            color_1(1) := stage2_Pix.g;
+            color_1(2) := stage2_Pix.b;
+            
+            color_0(0) := stage3_Pix.r;
+            color_0(1) := stage3_Pix.g;
+            color_0(2) := stage3_Pix.b;
+            
+            for i in 0 to 2 loop
+            
+               median(i) := color_1(i);
+               if (color_0(i) < color_1(i)) then
+                  if (color_1(i) > color_2(i)) then
+                     if (color_0(i) < color_2(i)) then
+                        median(i) := color_2(i);
+                     else
+                        median(i) := color_0(i);
+                     end if;
+                  end if;
+               else
+                  if (color_1(i) < color_2(i)) then
+                     if (color_0(i) < color_2(i)) then
+                        median(i) := color_0(i);
+                     else
+                        median(i) := color_2(i);
+                     end if;
+                  end if;
+               end if;
+                  
+            end loop;
+            
+            filter_color.r <= median(0);
+            filter_color.g <= median(1);
+            filter_color.b <= median(2);
+            
+         end if;
+
       end if;
    end process;
 
@@ -215,13 +295,13 @@ begin
             
             wait until rising_edge(clk1x);
             
-            if (filter_pixel = '1') then
+            if (stage1_ena = '1') then
                write(line_out, string'(" X ")); 
-               write(line_out, to_string_len(to_integer(filter_x_out), 5));
+               write(line_out, to_string_len(to_integer(stage1_x), 5));
                write(line_out, string'(" Y ")); 
-               write(line_out, to_string_len(to_integer(filter_y_out), 5));
+               write(line_out, to_string_len(to_integer(stage1_y), 5));
                write(line_out, string'(" C "));
-               color32 := 5x"0" & filter_color.c & filter_color.r & filter_color.g & filter_color.b;
+               color32 := 5x"0" & stage1_Pix.c & stage1_Pix.r & stage1_Pix.g & stage1_Pix.b;
                write(line_out, to_hstring(color32));
                writeline(outfile, line_out);
                tracecounts <= tracecounts + 1;

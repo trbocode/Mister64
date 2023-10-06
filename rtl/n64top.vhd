@@ -30,6 +30,8 @@ entity n64top is
       VI_GAMMAOFF             : in  std_logic;
       VI_DEDITHEROFF          : in  std_logic;
       VI_AAOFF                : in  std_logic;
+      VI_DIVOTOFF             : in  std_logic;
+      VI_NOISEOFF             : in  std_logic;
       
       CICTYPE                 : in  std_logic_vector(3 downto 0);
       RAMSIZE8                : in  std_logic;
@@ -76,6 +78,7 @@ entity n64top is
       sdram_Adr               : out std_logic_vector(26 downto 0);
       sdram_be                : out std_logic_vector(3 downto 0);
       sdram_dataWrite         : out std_logic_vector(31 downto 0);
+      sdram_reqprocessed      : in  std_logic;  
       sdram_done              : in  std_logic;  
       sdram_dataRead          : in  std_logic_vector(31 downto 0);
       
@@ -164,7 +167,7 @@ architecture arch of n64top is
    
    -- error codes
    signal errorEna               : std_logic;
-   signal errorCode              : unsigned(23 downto 0) := (others => '0');
+   signal errorCode              : unsigned(27 downto 0) := (others => '0');
    
    signal errorMEMMUX            : std_logic;
    signal errorCPU_instr         : std_logic;
@@ -190,6 +193,7 @@ architecture arch of n64top is
    signal errorDDR3_outRDP       : std_logic;
    signal errorDDR3_outRDPZ      : std_logic;
    signal errorRSP_PCON          : std_logic;
+   signal error_vi               : std_logic;
   
    -- irq
    signal irqRequest             : std_logic;
@@ -473,6 +477,9 @@ begin
    process (reset_intern_1x, errorDDR3_outRDP     ) begin if (errorDDR3_outRDP      = '1') then errorCode(21) <= '1'; elsif (reset_intern_1x = '1') then errorCode(21) <= '0'; end if; end process;
    process (reset_intern_1x, errorDDR3_outRDPZ    ) begin if (errorDDR3_outRDPZ     = '1') then errorCode(22) <= '1'; elsif (reset_intern_1x = '1') then errorCode(22) <= '0'; end if; end process;
    process (reset_intern_1x, errorRSP_PCON        ) begin if (errorRSP_PCON         = '1') then errorCode(23) <= '1'; elsif (reset_intern_1x = '1') then errorCode(23) <= '0'; end if; end process;
+   process (reset_intern_1x, error_vi             ) begin if (error_vi              = '1') then errorCode(24) <= '1'; elsif (reset_intern_1x = '1') then errorCode(24) <= '0'; end if; end process;
+   
+   errorCode(27 downto 25) <= "000";
    
    process (clk1x)
    begin
@@ -711,6 +718,8 @@ begin
       ce                   => ce_1x,           
       reset_1x             => reset_intern_1x, 
       
+      error_vi             => error_vi,
+      
       irq_out              => irqVector(3),
       
       second_ena           => second_ena,
@@ -719,8 +728,10 @@ begin
       CROPBOTTOM           => CROPBOTTOM,
       VI_BILINEAROFF       => VI_BILINEAROFF,
       VI_GAMMAOFF          => VI_GAMMAOFF,
+      VI_NOISEOFF          => VI_NOISEOFF,
       VI_DEDITHEROFF       => VI_DEDITHEROFF,
       VI_AAOFF             => VI_AAOFF,
+      VI_DIVOTOFF          => VI_DIVOTOFF,
      
       errorEna             => errorEna, 
       errorCode            => errorCode,
@@ -1075,6 +1086,9 @@ begin
       rdpfifoZ_empty   => rdpfifoZ_empty
    );
    
+   sdramMux_writeMask(SDRAMMUX_VI) <= (others => '0');
+   sdramMux_dataWrite(SDRAMMUX_VI) <= (others => '0');
+   
    iSDRamMux : entity work.SDRamMux
    port map
    (
@@ -1087,6 +1101,7 @@ begin
       sdram_Adr            => sdram_Adr,      
       sdram_be             => sdram_be,       
       sdram_dataWrite      => sdram_dataWrite,
+      sdram_reqprocessed   => sdram_reqprocessed,     
       sdram_done           => sdram_done,     
       sdram_dataRead       => sdram_dataRead, 
                            

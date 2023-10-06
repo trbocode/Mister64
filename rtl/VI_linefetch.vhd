@@ -12,6 +12,8 @@ entity VI_linefetch is
       clk2x              : in  std_logic;
       reset              : in  std_logic;
       
+      error_linefetch    : out std_logic := '0';
+      
       VI_CTRL_TYPE       : in unsigned(1 downto 0);
       VI_CTRL_SERRATE    : in std_logic;
       VI_ORIGIN          : in unsigned(23 downto 0);
@@ -28,6 +30,8 @@ entity VI_linefetch is
       startProc          : out std_logic := '0';
       procPtr            : out std_logic_vector(2 downto 0) := (others => '0');
       procDone           : in  std_logic;
+      
+      outprocIdle        : in  std_logic := '0';
       startOut           : out std_logic := '0';
       fracYout           : out unsigned(4 downto 0);
       
@@ -60,9 +64,12 @@ architecture arch of VI_linefetch is
       IDLE,
       REQUESTLINE,
       WAITDONE,
-      WAITPROC
+      WAITPROC,
+      WAITOUT
    );
    signal state            : tstate := IDLE;
+   
+   signal newLine          : std_logic;
    
    signal ram_offset       : signed(24 downto 0) := (others => '0');
    signal rdram_finished   : std_logic := '0';
@@ -87,6 +94,8 @@ begin
    
    lineWidth     <= VI_WIDTH & "00" when (VI_CTRL_TYPE = "11") else '0' & VI_WIDTH & '0';
   
+   newLine       <= '1' when (lineNr /= lineAct and fetch = '1') else '0';
+  
    y_accu_new    <= y_accu + VI_Y_SCALE_FACTOR; 
    
    y_diff        <= y_accu_new(y_accu_new'left downto 10) - y_accu(y_accu'left downto 10);
@@ -105,6 +114,11 @@ begin
          startProc     <= '0';
          startOut      <= '0';
          
+         error_linefetch <= '0';
+         if (state /= IDLE and (newLine = '1' or newFrame = '1')) then
+            error_linefetch <= '1';
+         end if;
+         
          if (VI_CTRL_TYPE = "10") then
             if (VI_X_SCALE_FACTOR > x"200") then -- hack for 320/640 pixel width
                rdram_burstcount <= 10x"B0";
@@ -120,18 +134,10 @@ begin
          end if;
          
          if (VI_X_SCALE_FACTOR > x"200") then -- hack for 320/640 pixel width
-            sdram_burstcount <= 8x"42";
+            sdram_burstcount <= 8x"30";
          else
-            sdram_burstcount <= 8x"22";
-         end if;
-         
-         if (out_wait > 0) then
-            out_wait <= out_wait - 1;
-            if (out_wait = 1) then
-               startOut <= '1';
-               fracYout <= y_accu(9 downto 5);
-            end if;
-         end if;
+            sdram_burstcount <= 8x"18";
+         end if; 
          
          if (reset = '1') then
          
@@ -152,7 +158,7 @@ begin
                      state         <= REQUESTLINE;
                   end if;
                   lineAct  <= lineNr;
-                  if (lineNr /= lineAct and fetch = '1') then
+                  if (newLine = '1') then
                      y_accu <= y_accu_new; 
                      if (y_diff > 0) then
                         state <= REQUESTLINE;
@@ -161,6 +167,7 @@ begin
                         end if;
                      else
                         out_wait <= 15;
+                        state    <= WAITOUT;
                      end if;
                   end if;
                   
@@ -205,6 +212,7 @@ begin
                            state <= WAITPROC;
                         else
                            out_wait <= 15;
+                           state    <= WAITOUT;
                         end if;
                      else
                         state <= REQUESTLINE;
@@ -214,6 +222,15 @@ begin
                when WAITPROC =>
                   if (procDone = '1') then
                      state <= REQUESTLINE;
+                  end if;
+                  
+               when WAITOUT =>
+                  if (out_wait > 0) then
+                     out_wait <= out_wait - 1;
+                  elsif (outprocIdle = '1') then
+                     state    <= IDLE;
+                     startOut <= '1';
+                     fracYout <= y_accu(9 downto 5);
                   end if;
             
             end case;

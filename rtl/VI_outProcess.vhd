@@ -10,31 +10,37 @@ use work.pFunctions.all;
 entity VI_outProcess is
    port 
    (
-      clk1x                   : in  std_logic;
-      reset                   : in  std_logic;
+      clk1x                         : in  std_logic;
+      reset                         : in  std_logic;
             
-      ISPAL                   : in  std_logic;
-      VI_BILINEAROFF          : in  std_logic;
-      VI_GAMMAOFF             : in  std_logic;
-      
-      VI_CTRL_GAMMA_ENABLE    : in  std_logic;
-      VI_H_VIDEO_START        : in  unsigned(9 downto 0);
-      VI_H_VIDEO_END          : in  unsigned(9 downto 0);
-      VI_X_SCALE_FACTOR       : in  unsigned(11 downto 0);
-      VI_X_SCALE_OFFSET       : in  unsigned(11 downto 0);
+      error_outProcess              : out std_logic := '0';
+                  
+      ISPAL                         : in  std_logic;
+      VI_BILINEAROFF                : in  std_logic;
+      VI_GAMMAOFF                   : in  std_logic;
+      VI_NOISEOFF                   : in  std_logic;
+      VI_CTRL_GAMMA_DITHER_ENABLE   : in  std_logic;
+      VI_CTRL_AA_MODE               : in  unsigned(1 downto 0);
             
-      newFrame                : in  std_logic;
-      startOut                : in  std_logic;
-      fracYout                : in  unsigned(4 downto 0);
-            
-      filter_y                : in  std_logic;
-      filterAddr              : out unsigned(10 downto 0) := (others => '0');
-      filterData              : in  unsigned(23 downto 0);
-            
-      out_pixel               : out std_logic := '0';
-      out_x                   : out unsigned(9 downto 0) := (others => '0');        
-      out_y                   : out unsigned(9 downto 0) := (others => '0');
-      out_color               : out unsigned(23 downto 0) := (others => '0')
+      VI_CTRL_GAMMA_ENABLE          : in  std_logic;
+      VI_H_VIDEO_START              : in  unsigned(9 downto 0);
+      VI_H_VIDEO_END                : in  unsigned(9 downto 0);
+      VI_X_SCALE_FACTOR             : in  unsigned(11 downto 0);
+      VI_X_SCALE_OFFSET             : in  unsigned(11 downto 0);
+                  
+      newFrame                      : in  std_logic;
+      startOut                      : in  std_logic;
+      fracYout                      : in  unsigned(4 downto 0);
+      outprocIdle                   : out std_logic;
+                  
+      filter_y                      : in  std_logic;
+      filterAddr                    : out unsigned(10 downto 0) := (others => '0');
+      filterData                    : in  unsigned(23 downto 0);
+                  
+      out_pixel                     : out std_logic := '0';
+      out_x                         : out unsigned(9 downto 0) := (others => '0');        
+      out_y                         : out unsigned(9 downto 0) := (others => '0');
+      out_color                     : out unsigned(23 downto 0) := (others => '0')
    );
 end entity;
 
@@ -100,6 +106,8 @@ architecture arch of VI_outProcess is
    signal bi_clear      : std_logic := '0';
    -- synthesis translate_on
    
+   signal lfsr          : unsigned(22 downto 0) := (others => '0');
+   
    signal gamma_guard   : std_logic := '0';
    signal gamma_start   : std_logic := '0';
    signal gamma_start_1 : std_logic := '0';
@@ -111,6 +119,8 @@ architecture arch of VI_outProcess is
 
 begin 
 
+   outprocIdle <= '1' when (state = IDLE) else '0';
+
    GUARD_START <= GUARD_START_PAL when (ISPAL = '1') else GUARD_START_NTSC;
    GUARD_STOP  <= GUARD_STOP_PAL  when (ISPAL = '1') else GUARD_STOP_NTSC;
    
@@ -119,10 +129,18 @@ begin
    process (clk1x)
    begin
       if rising_edge(clk1x) then
+      
+         lfsr(22 downto 1) <= lfsr(21 downto 0);
+         lfsr(0) <= not(lfsr(22) xor lfsr(18));
          
          out_pixel    <= '0';
          bi_start     <= '0';
          gamma_start  <= '0';
+         
+         error_outProcess <= '0';
+         if (state /= IDLE and (newFrame = '1' or startOut = '1')) then
+            error_outProcess <= '1';
+         end if;
          
          H_GUARD_START <= VI_H_VIDEO_START;
          if (VI_H_VIDEO_START >= GUARD_START) then
@@ -249,6 +267,11 @@ begin
             out_color(23 downto 16) <= gamma_read;
             if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
                out_color <= bi_out(2) & bi_out(1) & bi_out(0);
+               if (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') then
+                  if (bi_out(0) < 255 and lfsr(0) = '1') then out_color( 7 downto  0) <= bi_out(0) + 1; end if;
+                  if (bi_out(1) < 255 and lfsr(1) = '1') then out_color(15 downto  8) <= bi_out(1) + 1; end if;
+                  if (bi_out(2) < 255 and lfsr(2) = '1') then out_color(23 downto 16) <= bi_out(2) + 1; end if;
+               end if;
             end if;
             if (gamma_guard = '1') then
                out_color <= (others => '0');
@@ -277,7 +300,7 @@ begin
          bi_frac  <= bi_xfrac;
       end if;
       
-      if (VI_BILINEAROFF = '1') then
+      if (VI_BILINEAROFF = '1' or VI_CTRL_AA_MODE = "11") then
          bi_frac <= (others => '0');
       end if;
    

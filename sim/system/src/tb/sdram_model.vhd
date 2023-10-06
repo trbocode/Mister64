@@ -12,7 +12,8 @@ entity sdram_model is
       INITFILE          : string := "NONE";
       SCRIPTLOADING     : std_logic := '0';
       FILELOADING       : std_logic := '0';
-      LOADRDRAM         : std_logic := '0'
+      LOADRDRAM         : std_logic := '0';
+      READDELAY         : integer   := 0   -- 6 for match with HW
    );
    port 
    (
@@ -24,6 +25,7 @@ entity sdram_model is
       di                : in  std_logic_vector(31 downto 0);
       do                : out std_logic_vector(31 downto 0);
       done              : out std_logic := '0';
+      reqprocessed      : out std_logic := '0';
       fileSize          : out unsigned(29 downto 0) := (others => '0')
    );
 end entity;
@@ -37,6 +39,7 @@ architecture arch of sdram_model is
    signal waitcnt    : integer range 0 to 8 := 0;
    
    signal req_buffer  : std_logic := '0';
+   signal rnw_last    : std_logic := '0';
    
    signal refreshcnt  : integer range 0 to 260 := 0;
    
@@ -90,6 +93,7 @@ begin
       wait until rising_edge(clk);
       
       done         <= '0';
+      reqprocessed <= '0';
       
       if (req = '1') then
          req_buffer <= '1';
@@ -106,7 +110,7 @@ begin
             if (DOREFRESH = '1' and refreshcnt >= 260) then
                refreshcnt <= 0;
                waitrfs    <= 2;
-            else
+            elsif (rnw_last <= '0') then
                waitrfs    <= 2; -- hack to simulate dead time after write
             end if;
          end if;
@@ -122,9 +126,16 @@ begin
          if (be(0) = '1') then data(to_integer(unsigned(addr(26 downto 1)) & '0') + 0) := to_integer(unsigned(di( 7 downto  0))); end if;
          req_buffer <= '0';
          waitcnt    <= 2;
+         rnw_last   <= '0';
       elsif ((req = '1' or req_buffer = '1') and rnw = '1') then
-         done       <= '1';
+         reqprocessed <= '1';
+         if (READDELAY > 0) then
+            waitcnt    <= READDELAY;
+         else
+            done       <= '1';
+         end if;
          req_buffer   <= '0';
+         rnw_last     <= '1';
          addr_rotate := addr;
          for i in 0 to 1 loop
             do(7  + (i * 16) downto     (i * 16))  <= std_logic_vector(to_unsigned(data(to_integer(unsigned(addr_rotate(26 downto 1)) & '0') + 0), 8));

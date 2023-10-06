@@ -47,6 +47,7 @@ entity SDRamMux is
       sdram_Adr            : out std_logic_vector(26 downto 0);
       sdram_be             : out std_logic_vector(3 downto 0);
       sdram_dataWrite      : out std_logic_vector(31 downto 0);
+      sdram_reqprocessed   : in  std_logic;  
       sdram_done           : in  std_logic;  
       sdram_dataRead       : in  std_logic_vector(31 downto 0);
 
@@ -205,18 +206,20 @@ begin
                if (timeoutCount(timeoutCount'high) = '1') then
                   error <= '1';
                end if;
+               
                if (sdram_done = '1') then
-                  timeoutCount <= (others => '0');
-                  
                   remain <= remain - 1;
                   if (remain <= 1) then
-                     state     <= IDLE;  
-                  else
-                     sdram_Adr <= std_logic_vector(unsigned(sdram_Adr) + 4);
-                     sdram_ena <= '1';
+                     state  <= IDLE;  
                   end if;
                end if;
-         
+                  
+               if (sdram_reqprocessed = '1' and remain >= 2) then
+                  timeoutCount <= (others => '0');
+                  sdram_Adr    <= std_logic_vector(unsigned(sdram_Adr) + 4);
+                  sdram_ena    <= '1';
+               end if;
+
          end case;
 
       end if;

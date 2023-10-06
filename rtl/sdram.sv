@@ -42,6 +42,7 @@ module sdram
 	input             ch1_rnw,     // 1 - read, 0 - write
    input      [3:0]  ch1_be,
 	output reg        ch1_ready,
+	output reg        ch1_reqprocessed,
 	
 	input      [26:0] ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
 	output reg [31:0] ch2_dout,    // data output to cpu
@@ -125,6 +126,8 @@ always @(posedge clk) begin
 	ch1_ready <= 0;
 	ch2_ready <= 0;
 	ch3_ready <= 0;
+   
+   ch1_reqprocessed <= 0;
 
 	refresh_count <= refresh_count+1'b1;
 
@@ -227,6 +230,9 @@ always @(posedge clk) begin
 				ch1_rq     <= 0;
 				command    <= CMD_ACTIVE;
 				state      <= STATE_WAIT;
+            if (ch1_rnw) begin
+               ch1_reqprocessed <= 1;
+            end
 			end
 			else if(ch2_rq) begin
 				{cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, ch2_rnw, ch2_addr[25:1]};
