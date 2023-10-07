@@ -57,7 +57,7 @@ src/tb/cpu_mul.vhd ^
 ../../rtl/VI_lineProcess.vhd ^
 ../../rtl/VI_filter_pen.vhd ^
 ../../rtl/VI_filter.vhd ^
-../../rtl/VI_gammatable.vhd ^
+../../rtl/VI_sqrt.vhd ^
 ../../rtl/VI_outProcess.vhd ^
 ../../rtl/VI_videoout.vhd ^
 ../../rtl/VI.vhd ^

@@ -494,7 +494,8 @@ begin
                      '1' when (loading_mode = '0' and curcross = '1') else
                      '0';
                    
-   calcFBAddr     <= resize(((lineInfo.y * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
+   calcFBAddr     <= resize(((lineInfo.y * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 1, 26) when (settings_colorImage.FB_size = SIZE_8BIT) else
+                     resize(((lineInfo.y * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
                      resize(((lineInfo.y * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 4, 26);
    
    calcZAddr      <= resize(((lineInfo.y * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26);
@@ -763,7 +764,8 @@ begin
                    '1' when (linestate = FILLLINE and line_posX > line_endX) else 
                    '0';
    
-   calcPixelAddr <= resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
+   calcPixelAddr <= resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 1, 26) when (settings_colorImage.FB_size = SIZE_8BIT) else
+                    resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
                     resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 4, 26);
    
    calcPixelAddrZ  <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26);

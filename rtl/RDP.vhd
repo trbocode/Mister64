@@ -297,6 +297,7 @@ architecture arch of RDP is
    signal writePixelCvg             : unsigned(2 downto 0);
    signal writePixelFBData9         : unsigned(31 downto 0);
    
+   signal writePixelData8           : unsigned(7 downto 0);
    signal writePixelData16          : unsigned(15 downto 0);
    signal writePixelData32          : unsigned(31 downto 0);
    
@@ -1293,6 +1294,7 @@ begin
       copyBE                  => copyBE  
    );
    
+   writePixelData8  <= writePixelColor(1) when (writePixelAddr(0) = '1') else writePixelColor(0);
    writePixelData16 <= writePixelColor(0)(7 downto 3) & writePixelColor(1)(7 downto 3) & writePixelColor(2)(7 downto 3) & writePixelCvg(2);
    writePixelData32 <= writePixelColor(0) & writePixelColor(1) & writePixelColor(2) & writePixelCvg & "00000";
    
@@ -1363,7 +1365,19 @@ begin
                pixel64filled <= '1';
             end if;
             
-            if (settings_colorImage.FB_size = SIZE_16BIT) then
+            if (settings_colorImage.FB_size = SIZE_8BIT) then
+               case (writePixelAddr(2 downto 0)) is
+                  when "000" => pixel64data( 7 downto  0) <= std_logic_vector(writePixelData8); pixel64BE(0) <= '1';
+                  when "001" => pixel64data(15 downto  8) <= std_logic_vector(writePixelData8); pixel64BE(1) <= '1';
+                  when "010" => pixel64data(23 downto 16) <= std_logic_vector(writePixelData8); pixel64BE(2) <= '1';
+                  when "011" => pixel64data(31 downto 24) <= std_logic_vector(writePixelData8); pixel64BE(3) <= '1';
+                  when "100" => pixel64data(39 downto 32) <= std_logic_vector(writePixelData8); pixel64BE(4) <= '1';
+                  when "101" => pixel64data(47 downto 40) <= std_logic_vector(writePixelData8); pixel64BE(5) <= '1';
+                  when "110" => pixel64data(55 downto 48) <= std_logic_vector(writePixelData8); pixel64BE(6) <= '1';
+                  when "111" => pixel64data(63 downto 56) <= std_logic_vector(writePixelData8); pixel64BE(7) <= '1';
+                  when others => null;
+               end case;
+            elsif (settings_colorImage.FB_size = SIZE_16BIT) then
                case (writePixelAddr(2 downto 1)) is
                   when "00" => pixel64data(15 downto  0) <= std_logic_vector(byteswap16(writePixelData16)); pixel64BE(1 downto 0) <= "11";
                   when "01" => pixel64data(31 downto 16) <= std_logic_vector(byteswap16(writePixelData16)); pixel64BE(3 downto 2) <= "11";

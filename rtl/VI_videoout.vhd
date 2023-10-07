@@ -347,6 +347,7 @@ begin
       reset              => reset_1x,         
                          
       VI_CTRL_TYPE       => VI_CTRL_TYPE,  
+      VI_CTRL_AA_MODE    => VI_CTRL_AA_MODE,  
       VI_WIDTH           => VI_WIDTH,      
                          
       newFrame           => videoout_reports.newFrame,          

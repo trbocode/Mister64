@@ -140,6 +140,10 @@ begin
                when FORMAT_YUV => error_texMode <= '1'; -- should not be allowed
                
                when FORMAT_RGBA | FORMAT_CI => -- 8 bit RGBA behaves like CI
+                  tex_color_read(0) <= data8;
+                  tex_color_read(1) <= data8;
+                  tex_color_read(2) <= data8;
+                  tex_alpha_read    <= data8;
                   -- synthesis translate_off
                   exportNext_TexFt_addr <= 20x"0" & '1' & unsigned(tex_palette_addr) & "000";
                   exportNext_TexFt_db1  <= resize(addr_base_1, 32);

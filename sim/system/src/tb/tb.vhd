@@ -61,6 +61,7 @@ architecture arch of etb is
    signal sdram_rnw           : std_logic;
    signal sdram_ena           : std_logic;
    signal sdram_done          : std_logic;        
+   signal sdram_reqprocessed  : std_logic;        
    
    -- video
    signal hblank              : std_logic;
@@ -111,6 +112,11 @@ begin
       ISPAL                 => '0',
       CROPBOTTOM            => "00",
       VI_BILINEAROFF        => '0',
+      VI_GAMMAOFF           => '0',
+      VI_NOISEOFF           => '1',
+      VI_DEDITHEROFF        => '0',
+      VI_AAOFF              => '0',
+      VI_DIVOTOFF           => '0',
       
       CICTYPE               => "0000",
       RAMSIZE8              => '1',
@@ -157,6 +163,7 @@ begin
       sdram_Adr             => sdram_Adr,      
       sdram_be              => sdram_be,       
       sdram_dataWrite       => sdram_dataWrite,
+      sdram_reqprocessed    => sdram_reqprocessed,     
       sdram_done            => sdram_done,     
       sdram_dataRead        => sdram_dataRead, 
       
@@ -259,6 +266,7 @@ begin
       be                => sdram_be,
       di                => sdram_dataWrite,
       do                => sdram_dataRead,
+      reqprocessed      => sdram_reqprocessed,
       done              => sdram_done,
       fileSize          => open
    );

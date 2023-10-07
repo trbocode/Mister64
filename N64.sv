@@ -189,8 +189,9 @@ assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
 
-assign VIDEO_ARX = 12'd4;
-assign VIDEO_ARY = 12'd3;
+wire [1:0] ar = status[48:47];
+assign VIDEO_ARX = (!ar) ? 12'd4 : (ar - 1'd1);
+assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 
 ///////////////////////  CLOCK/RESET  ///////////////////////////////////
 
@@ -249,19 +250,20 @@ parameter CONF_STR = {
    "O[57:56],Pad 4 Pak,None,CPAK,Rumble;",
    "O[60],Swap Analog<->DPAD,Off,On;",
 	"-;",
-   "O[30],Texture Filter,On,Off;",
-   "O[31],Dithering,On,Off;",
-   "O[32],VI Bilinear,On,Off;",
-   "O[33],VI Gamma,On,Off;",
-   "O[34],VI Dedither,On,Off;",
-   "O[35],VI Antialias,On,Off;",
-   "O[36],VI Divot,On,Off;",
-   "O[37],VI Noisedither,On,Off;",
+   "O[30],Texture Filter,Default,Off;",
+   "O[31],Dithering,Default,Off;",
+   "O[32],VI Bilinear,Default,Off;",
+   "O[33],VI Gamma,Default,Off;",
+   "O[34],VI Dedither,Default,Off;",
+   "O[35],VI Antialias,Default,Off;",
+   "O[36],VI Divot,Default,Off;",
+   "O[37],VI Noisedither,Default,Off;",
    "-;",
    "O[2],Error Overlay,Off,On;",
    "O[28],FPS Overlay,Off,On;",
    "O[8:7],Stereo Mix,None,25%,50%,100%;",
    "O[45:44],Crop Bottom,None,8,16,24;",
+   "O[48:47],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
    "-;",
    
    "P2,System settings;",

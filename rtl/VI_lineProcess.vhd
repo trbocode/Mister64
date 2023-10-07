@@ -13,6 +13,7 @@ entity VI_lineProcess is
       reset              : in  std_logic;
       
       VI_CTRL_TYPE       : in unsigned(1 downto 0);
+      VI_CTRL_AA_MODE    : in  unsigned(1 downto 0);
       VI_WIDTH           : in unsigned(11 downto 0);
       
       newFrame           : in  std_logic;
@@ -80,12 +81,16 @@ begin
             fetchArray(i).r <= fetchdata(i)( 7 downto  0);
             fetchArray(i).g <= fetchdata(i)(15 downto  8);
             fetchArray(i).b <= fetchdata(i)(23 downto 16);
-            fetchArray(i).c <= fetchdata(i)(26 downto 24);
+            fetchArray(i).c <= fetchdata(i)(31 downto 29);
          else
             fetchArray(i).r <= fetchdata16(i)(15 downto 11) & "000";
             fetchArray(i).g <= fetchdata16(i)(10 downto  6) & "000";
             fetchArray(i).b <= fetchdata16(i)( 5 downto  1) & "000";
             fetchArray(i).c <= fetchdata16(i)(0) & fetchdata9(i);
+         end if;
+         
+         if (VI_CTRL_AA_MODE(1) = '1') then
+            fetchArray(i).c <= "111";
          end if;
          
       end loop;

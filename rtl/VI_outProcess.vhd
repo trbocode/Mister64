@@ -114,8 +114,13 @@ architecture arch of VI_outProcess is
    signal gamma_start_2 : std_logic := '0';
    signal gamma_start_3 : std_logic := '0';
    
-   signal gamma_addr    : unsigned(7 downto 0);
-   signal gamma_read    : unsigned(7 downto 0);
+   signal gamma_in_r    : unsigned(13 downto 0);
+   signal gamma_in_g    : unsigned(13 downto 0);
+   signal gamma_in_b    : unsigned(13 downto 0);
+   
+   signal gamma_sqrt_r  : unsigned(7 downto 0);
+   signal gamma_sqrt_g  : unsigned(7 downto 0);
+   signal gamma_sqrt_b  : unsigned(7 downto 0);
 
 begin 
 
@@ -253,29 +258,25 @@ begin
             out_x     <= bi_x;
             out_y     <= bi_y;
          end if;
-         
-         if (gamma_start_1 = '1') then
-            out_color(7 downto 0) <= gamma_read;
-         end if;
-            
-         if (gamma_start_2 = '1') then
-            out_color(15 downto 8) <= gamma_read;
-         end if;
-         
+        
          if (gamma_start_3 = '1') then
             out_pixel <= '1';
-            out_color(23 downto 16) <= gamma_read;
-            if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
-               out_color <= bi_out(2) & bi_out(1) & bi_out(0);
-               if (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') then
-                  if (bi_out(0) < 255 and lfsr(0) = '1') then out_color( 7 downto  0) <= bi_out(0) + 1; end if;
-                  if (bi_out(1) < 255 and lfsr(1) = '1') then out_color(15 downto  8) <= bi_out(1) + 1; end if;
-                  if (bi_out(2) < 255 and lfsr(2) = '1') then out_color(23 downto 16) <= bi_out(2) + 1; end if;
-               end if;
-            end if;
-            if (gamma_guard = '1') then
-               out_color <= (others => '0');
-            end if;
+         end if;
+         
+         out_color <= gamma_sqrt_b & gamma_sqrt_g & gamma_sqrt_r;
+            
+         if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
+            out_color <= bi_out(2) & bi_out(1) & bi_out(0);
+         end if;
+         
+         if (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') then
+            out_color( 0) <= lfsr(0);
+            out_color( 8) <= lfsr(1);
+            out_color(16) <= lfsr(2);
+         end if;
+         
+         if (gamma_guard = '1') then
+            out_color <= (others => '0');
          end if;
        
       end if;
@@ -314,17 +315,36 @@ begin
       
    end process;
    
-   -- gamma fetch
-   gamma_addr <= bi_out(0) when (gamma_start = '1') else 
-                 bi_out(1) when (gamma_start_1 = '1') else 
-                 bi_out(2);
+   -- gamma sqrt
+   gamma_in_r <= bi_out(0) & lfsr(5 downto 0)                     when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(0) & 6x"0";
+   gamma_in_g <= bi_out(1) & lfsr(11 downto 6)                    when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(1) & 6x"0";
+   gamma_in_b <= bi_out(2) & lfsr(11 downto 9) & lfsr(2 downto 0) when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(2) & 6x"0";
    
-   iVI_gammatable : entity work.VI_gammatable
+   iVI_sqrt_r : entity work.VI_sqrt
    port map
    (
-      clk   => clk1x,
-      addr  => gamma_addr,
-      data  => gamma_read
+      clk        => clk1x,
+      start      => gamma_start,
+      val_in     => gamma_in_r,
+      val_out    => gamma_sqrt_r
+   );   
+   
+   iVI_sqrt_g : entity work.VI_sqrt
+   port map
+   (
+      clk        => clk1x,
+      start      => gamma_start,
+      val_in     => gamma_in_g,
+      val_out    => gamma_sqrt_g
+   );   
+   
+   iVI_sqrt_b : entity work.VI_sqrt
+   port map
+   (
+      clk        => clk1x,
+      start      => gamma_start,
+      val_in     => gamma_in_b,
+      val_out    => gamma_sqrt_b
    );
    
    

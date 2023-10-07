@@ -107,6 +107,12 @@ begin
             old_Z_mem(16) <= FBData9Z((to_integer(muxselect9_1) * 2) + 0);
          
             case (settings_colorImage.FB_size) is
+               when SIZE_8BIT =>
+                  FBcolor(0) <= x"E0"; -- todo: unclear
+                  FBcolor(1) <= x"E0"; -- todo: unclear
+                  FBcolor(2) <= x"E0"; -- todo: unclear
+                  FBcolor(3) <= x"E0"; -- todo: unclear
+            
                when SIZE_16BIT =>
                   FBcolor(0) <= Fbdata16(15 downto 11) & "000";
                   FBcolor(1) <= Fbdata16(10 downto 6) & "000";
