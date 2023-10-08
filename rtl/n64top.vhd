@@ -89,6 +89,7 @@ entity n64top is
       PADTYPE2                : in  std_logic_vector(1 downto 0);
       PADTYPE3                : in  std_logic_vector(1 downto 0);
       PADDPADSWAP             : in  std_logic;
+      PADSLOW                 : in  std_logic;
       rumble                  : out std_logic_vector(3 downto 0);
       pad_A                   : in  std_logic_vector(3 downto 0);
       pad_B                   : in  std_logic_vector(3 downto 0);
@@ -340,6 +341,17 @@ architecture arch of n64top is
    signal bus_PIF_write          : std_logic;
    signal bus_PIF_dataRead       : std_logic_vector(31 downto 0);  
    signal bus_PIF_done           : std_logic;
+   
+   -- exchange of PIF and controller module
+   signal command_start          : std_logic;
+   signal command_padindex       : unsigned(1 downto 0);
+   signal command_sendCnt        : unsigned(5 downto 0);
+   signal command_receiveCnt     : unsigned(5 downto 0);
+   signal toPad_ena              : std_logic;   
+   signal toPad_data             : std_logic_vector(7 downto 0);          
+   signal toPad_ready            : std_logic;  
+   signal toPIF_ena              : std_logic;   
+   signal toPIF_data             : std_logic_vector(7 downto 0);
    
    -- SI/PIF
    signal SIPIF_ramreq           : std_logic;
@@ -948,6 +960,16 @@ begin
       
       error                => error_pif,
       
+      command_start        => command_start,     
+      command_padindex     => command_padindex,  
+      command_sendCnt      => command_sendCnt,   
+      command_receiveCnt   => command_receiveCnt,                
+      toPad_ena            => toPad_ena,         
+      toPad_data           => toPad_data,        
+      toPad_ready          => toPad_ready,                              
+      toPIF_ena            => toPIF_ena,         
+      toPIF_data           => toPIF_data,  
+      
       pifrom_wraddress     => pifrom_wraddress,
       pifrom_wrdata        => pifrom_wrdata,   
       pifrom_wren          => pifrom_wren,   
@@ -969,29 +991,6 @@ begin
       bus_write            => bus_PIF_write,    
       bus_dataRead         => bus_PIF_dataRead, 
       bus_done             => bus_PIF_done,
-      
-      pad_A                => pad_A,         
-      pad_B                => pad_B,         
-      pad_Z                => pad_Z,         
-      pad_START            => pad_START,     
-      pad_DPAD_UP          => pad_DPAD_UP,   
-      pad_DPAD_DOWN        => pad_DPAD_DOWN, 
-      pad_DPAD_LEFT        => pad_DPAD_LEFT,
-      pad_DPAD_RIGHT       => pad_DPAD_RIGHT,
-      pad_L                => pad_L,         
-      pad_R                => pad_R,         
-      pad_C_UP             => pad_C_UP,      
-      pad_C_DOWN           => pad_C_DOWN,    
-      pad_C_LEFT           => pad_C_LEFT,    
-      pad_C_RIGHT          => pad_C_RIGHT,   
-      pad_0_analog_h       => pad_0_analog_h,
-      pad_0_analog_v       => pad_0_analog_v,
-      pad_1_analog_h       => pad_1_analog_h,
-      pad_1_analog_v       => pad_1_analog_v,
-      pad_2_analog_h       => pad_2_analog_h,
-      pad_2_analog_v       => pad_2_analog_v,
-      pad_3_analog_h       => pad_3_analog_h,
-      pad_3_analog_v       => pad_3_analog_v,
       
       rumble               => rumble,
       
@@ -1019,6 +1018,57 @@ begin
       SS_wren              => SS_wren(3),     
       SS_rden              => SS_rden(3),            
       SS_DataRead          => SS_DataRead_PIF
+   );
+   
+   iGamepad : entity work.Gamepad
+   port map
+   (
+      clk1x                => clk1x,                
+      reset                => reset_intern_1x, 
+      
+      PADCOUNT             => PADCOUNT,
+      PADTYPE0             => PADTYPE0,
+      PADTYPE1             => PADTYPE1,
+      PADTYPE2             => PADTYPE2,
+      PADTYPE3             => PADTYPE3,
+      PADDPADSWAP          => PADDPADSWAP,
+      CPAKFORMAT           => CPAKFORMAT,
+      PADSLOW              => PADSLOW,
+      
+      command_start        => command_start,     
+      command_padindex     => command_padindex,  
+      command_sendCnt      => command_sendCnt,   
+      command_receiveCnt   => command_receiveCnt,
+                       
+      toPad_ena            => toPad_ena,         
+      toPad_data           => toPad_data,        
+      toPad_ready          => toPad_ready,        
+                                
+      toPIF_ena            => toPIF_ena,         
+      toPIF_data           => toPIF_data,        
+
+      pad_A                => pad_A,         
+      pad_B                => pad_B,         
+      pad_Z                => pad_Z,         
+      pad_START            => pad_START,     
+      pad_DPAD_UP          => pad_DPAD_UP,   
+      pad_DPAD_DOWN        => pad_DPAD_DOWN, 
+      pad_DPAD_LEFT        => pad_DPAD_LEFT,
+      pad_DPAD_RIGHT       => pad_DPAD_RIGHT,
+      pad_L                => pad_L,         
+      pad_R                => pad_R,         
+      pad_C_UP             => pad_C_UP,      
+      pad_C_DOWN           => pad_C_DOWN,    
+      pad_C_LEFT           => pad_C_LEFT,    
+      pad_C_RIGHT          => pad_C_RIGHT,   
+      pad_0_analog_h       => pad_0_analog_h,
+      pad_0_analog_v       => pad_0_analog_v,
+      pad_1_analog_h       => pad_1_analog_h,
+      pad_1_analog_v       => pad_1_analog_v,
+      pad_2_analog_h       => pad_2_analog_h,
+      pad_2_analog_v       => pad_2_analog_v,
+      pad_3_analog_h       => pad_3_analog_h,
+      pad_3_analog_v       => pad_3_analog_v
    );
 
    rdram_writeMask(DDR3MUX_VI) <= (others => '-');

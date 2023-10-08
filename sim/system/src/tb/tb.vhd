@@ -174,6 +174,7 @@ begin
       PADTYPE2              => "00",
       PADTYPE3              => "00",
       PADDPADSWAP           => '0',
+      PADSLOW               => '0',
       pad_A                 => "0000",
       pad_B                 => "0000",
       pad_Z                 => "0000",

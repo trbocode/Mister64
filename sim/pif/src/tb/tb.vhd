@@ -15,6 +15,18 @@ architecture arch of etb is
 
    signal clk1x               : std_logic := '1';
    signal reset               : std_logic := '1';
+   
+   signal command_start        : std_logic;
+   signal command_padindex     : unsigned(1 downto 0);
+   signal command_sendCnt      : unsigned(5 downto 0);
+   signal command_receiveCnt   : unsigned(5 downto 0);
+
+   signal toPad_ena            : std_logic;   
+   signal toPad_data           : std_logic_vector(7 downto 0);          
+   signal toPad_ready          : std_logic;  
+   
+   signal toPIF_ena            : std_logic;   
+   signal toPIF_data           : std_logic_vector(7 downto 0);
          
    signal SIPIF_ramreq        : std_logic := '0';
    signal SIPIF_addr          : unsigned(5 downto 0) := (others => '0');
@@ -43,6 +55,7 @@ architecture arch of etb is
    signal sdram_rnw           : std_logic;
    signal sdram_ena           : std_logic;
    signal sdram_done          : std_logic;    
+   signal sdram_reqprocessed  : std_logic;    
    
    -- testbench
    signal cmdCount            : integer := 0;
@@ -70,7 +83,18 @@ begin
       PADTYPE1             => "00",
       PADTYPE2             => "00",
       PADTYPE3             => "00",
+      PADDPADSWAP          => '0',
       CPAKFORMAT           => '0',
+                           
+      command_start        => command_start,     
+      command_padindex     => command_padindex,  
+      command_sendCnt      => command_sendCnt,   
+      command_receiveCnt   => command_receiveCnt,                
+      toPad_ena            => toPad_ena,         
+      toPad_data           => toPad_data,                              
+      toPad_ready          => toPad_ready,                              
+      toPIF_ena            => toPIF_ena,         
+      toPIF_data           => toPIF_data, 
                            
       pifrom_wraddress     => 10x"0",
       pifrom_wrdata        => 32x"0",
@@ -93,29 +117,6 @@ begin
       bus_write            => '0',
       bus_dataRead         => open,
       bus_done             => open,
-      
-      pad_A                => "0000",
-      pad_B                => "0000",
-      pad_Z                => "0000",
-      pad_START            => "0000",
-      pad_DPAD_UP          => "0000",
-      pad_DPAD_DOWN        => "0000",
-      pad_DPAD_LEFT        => "0000",
-      pad_DPAD_RIGHT       => "0000",
-      pad_L                => "0000",
-      pad_R                => "0000",
-      pad_C_UP             => "0000",
-      pad_C_DOWN           => "0000",
-      pad_C_LEFT           => "0000",
-      pad_C_RIGHT          => "0000",
-      pad_0_analog_h       => x"00",
-      pad_0_analog_v       => x"00",
-      pad_1_analog_h       => x"00",
-      pad_1_analog_v       => x"00",
-      pad_2_analog_h       => x"00",
-      pad_2_analog_v       => x"00",
-      pad_3_analog_h       => x"00",
-      pad_3_analog_v       => x"00",
       
       eeprom_addr          => 9x"0",
       eeprom_wren          => '0',
@@ -140,6 +141,57 @@ begin
       SS_idle              => open
    );
    
+   iGamepad : entity N64.Gamepad
+   port map
+   (
+      clk1x                => clk1x,
+      reset                => reset,
+     
+      PADCOUNT             => "11",
+      PADTYPE0             => "01",
+      PADTYPE1             => "00",
+      PADTYPE2             => "00",
+      PADTYPE3             => "00",
+      PADDPADSWAP          => '0',
+      CPAKFORMAT           => '0',
+      PADSLOW              => '1',
+      
+      command_start        => command_start,     
+      command_padindex     => command_padindex,  
+      command_sendCnt      => command_sendCnt,   
+      command_receiveCnt   => command_receiveCnt,
+                       
+      toPad_ena            => toPad_ena,         
+      toPad_data           => toPad_data,        
+      toPad_ready          => toPad_ready,        
+                                
+      toPIF_ena            => toPIF_ena,         
+      toPIF_data           => toPIF_data,        
+
+      pad_A                => "0000",
+      pad_B                => "0000",
+      pad_Z                => "0000",
+      pad_START            => "0000",
+      pad_DPAD_UP          => "0000",
+      pad_DPAD_DOWN        => "0000",
+      pad_DPAD_LEFT        => "0000",
+      pad_DPAD_RIGHT       => "0000",
+      pad_L                => "0000",
+      pad_R                => "0000",
+      pad_C_UP             => "0000",
+      pad_C_DOWN           => "0000",
+      pad_C_LEFT           => "0000",
+      pad_C_RIGHT          => "0000",
+      pad_0_analog_h       => x"00",
+      pad_0_analog_v       => x"00",
+      pad_1_analog_h       => x"00",
+      pad_1_analog_v       => x"00",
+      pad_2_analog_h       => x"00",
+      pad_2_analog_v       => x"00",
+      pad_3_analog_h       => x"00",
+      pad_3_analog_v       => x"00"
+   );
+   
    iSDRamMux : entity n64.SDRamMux
    port map
    (
@@ -153,6 +205,7 @@ begin
       sdram_be             => sdram_be,       
       sdram_dataWrite      => sdram_dataWrite,
       sdram_done           => sdram_done,     
+      sdram_reqprocessed   => sdram_reqprocessed,     
       sdram_dataRead       => sdram_dataRead, 
                            
       sdramMux_request     => sdramMux_request,   
@@ -194,6 +247,7 @@ begin
       be                => sdram_be,
       di                => sdram_dataWrite,
       do                => sdram_dataRead,
+      reqprocessed      => sdram_reqprocessed,
       done              => sdram_done,
       fileSize          => open
    );

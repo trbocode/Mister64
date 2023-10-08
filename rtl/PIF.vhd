@@ -27,6 +27,16 @@ entity pif is
       
       error                : out std_logic := '0';
       
+      command_start        : out std_logic := '0';
+      command_padindex     : out unsigned(1 downto 0) := (others => '0');
+      command_sendCnt      : out unsigned(5 downto 0) := (others => '0');
+      command_receiveCnt   : out unsigned(5 downto 0) := (others => '0');
+      toPad_ena            : out std_logic := '0';   
+      toPad_data           : out std_logic_vector(7 downto 0) := (others => '0');     
+      toPad_ready          : in  std_logic;          
+      toPIF_ena            : in  std_logic;   
+      toPIF_data           : in  std_logic_vector(7 downto 0);
+      
       pifrom_wraddress     : in  std_logic_vector(9 downto 0);
       pifrom_wrdata        : in  std_logic_vector(31 downto 0);
       pifrom_wren          : in  std_logic;
@@ -48,29 +58,6 @@ entity pif is
       bus_write            : in  std_logic;
       bus_dataRead         : out std_logic_vector(31 downto 0) := (others => '0');
       bus_done             : out std_logic := '0';
-      
-      pad_A                : in  std_logic_vector(3 downto 0);
-      pad_B                : in  std_logic_vector(3 downto 0);
-      pad_Z                : in  std_logic_vector(3 downto 0);
-      pad_START            : in  std_logic_vector(3 downto 0);
-      pad_DPAD_UP          : in  std_logic_vector(3 downto 0);
-      pad_DPAD_DOWN        : in  std_logic_vector(3 downto 0);
-      pad_DPAD_LEFT        : in  std_logic_vector(3 downto 0);
-      pad_DPAD_RIGHT       : in  std_logic_vector(3 downto 0);
-      pad_L                : in  std_logic_vector(3 downto 0);
-      pad_R                : in  std_logic_vector(3 downto 0);
-      pad_C_UP             : in  std_logic_vector(3 downto 0);
-      pad_C_DOWN           : in  std_logic_vector(3 downto 0);
-      pad_C_LEFT           : in  std_logic_vector(3 downto 0);
-      pad_C_RIGHT          : in  std_logic_vector(3 downto 0);
-      pad_0_analog_h       : in  std_logic_vector(7 downto 0);
-      pad_0_analog_v       : in  std_logic_vector(7 downto 0);      
-      pad_1_analog_h       : in  std_logic_vector(7 downto 0);
-      pad_1_analog_v       : in  std_logic_vector(7 downto 0);      
-      pad_2_analog_h       : in  std_logic_vector(7 downto 0);
-      pad_2_analog_v       : in  std_logic_vector(7 downto 0);      
-      pad_3_analog_h       : in  std_logic_vector(7 downto 0);
-      pad_3_analog_v       : in  std_logic_vector(7 downto 0);
       
       rumble               : out std_logic_vector(3 downto 0) := (others => '0');
       
@@ -164,8 +151,7 @@ architecture arch of pif is
       EXTCOMM_EVALTYPEGAMEPAD,
       EXTCOMM_EVALTYPEEEPROMRTC,
       
-      EXTCOMM_RESPONSETYPE,
-      EXTCOMM_RESPONSEPAD,
+      EXTCOMM_RESPONSE_OUT,
       
       EXTCOMM_PAK_READADDR1,
       EXTCOMM_PAK_READADDR2,
@@ -216,28 +202,12 @@ architecture arch of pif is
    signal EXT_skip                  : std_logic := '0';
    signal EXP_responseindex         : unsigned(2 downto 0);
    
-   type t_responsedata is array(0 to 3) of std_logic_vector(7 downto 0);
+   type t_responsedata is array(0 to 2) of std_logic_vector(7 downto 0);
    signal EXT_responsedata : t_responsedata;      
    
    signal PADTYPE                   : std_logic_vector(1 downto 0);
    
-   signal pad_muxed_A               : std_logic;
-   signal pad_muxed_B               : std_logic;
-   signal pad_muxed_C               : std_logic;
-   signal pad_muxed_START           : std_logic;
-   signal pad_muxed_DPAD_UP         : std_logic;
-   signal pad_muxed_DPAD_DOWN       : std_logic;
-   signal pad_muxed_DPAD_LEFT       : std_logic;
-   signal pad_muxed_DPAD_RIGHT      : std_logic;
-   signal pad_muxed_L               : std_logic;
-   signal pad_muxed_R               : std_logic;
-   signal pad_muxed_C_UP            : std_logic;
-   signal pad_muxed_C_DOWN          : std_logic;
-   signal pad_muxed_C_LEFT          : std_logic;
-   signal pad_muxed_C_RIGHT         : std_logic;
-                                   
-   signal pad_muxed_analogH         : std_logic_vector(7 downto 0);
-   signal pad_muxed_analogV         : std_logic_vector(7 downto 0);
+   signal receivecount              : unsigned(5 downto 0) := (others => '0');
    
    -- PIFRAM
    signal pifram_wren               : std_logic := '0';
@@ -367,31 +337,8 @@ begin
               PADTYPE2 when (EXT_channel(1 downto 0) = "10") else 
               PADTYPE3;
               
-   pad_muxed_A          <= pad_A(to_integer(EXT_channel(1 downto 0)));         
-   pad_muxed_B          <= pad_B(to_integer(EXT_channel(1 downto 0)));         
-   pad_muxed_C          <= pad_Z(to_integer(EXT_channel(1 downto 0)));         
-   pad_muxed_START      <= pad_START(to_integer(EXT_channel(1 downto 0)));     
-   pad_muxed_DPAD_UP    <= pad_DPAD_UP(to_integer(EXT_channel(1 downto 0)));   
-   pad_muxed_DPAD_DOWN  <= pad_DPAD_DOWN(to_integer(EXT_channel(1 downto 0))); 
-   pad_muxed_DPAD_LEFT  <= pad_DPAD_LEFT(to_integer(EXT_channel(1 downto 0))); 
-   pad_muxed_DPAD_RIGHT <= pad_DPAD_RIGHT(to_integer(EXT_channel(1 downto 0)));
-   pad_muxed_L          <= pad_L(to_integer(EXT_channel(1 downto 0)));      
-   pad_muxed_R          <= pad_R(to_integer(EXT_channel(1 downto 0)));      
-   pad_muxed_C_UP       <= pad_C_UP(to_integer(EXT_channel(1 downto 0)));   
-   pad_muxed_C_DOWN     <= pad_C_DOWN(to_integer(EXT_channel(1 downto 0))); 
-   pad_muxed_C_LEFT     <= pad_C_LEFT(to_integer(EXT_channel(1 downto 0))); 
-   pad_muxed_C_RIGHT    <= pad_C_RIGHT(to_integer(EXT_channel(1 downto 0)));
-   
-   process (all)
-   begin
-      case (EXT_channel(1 downto 0)) is
-         when "00"   => pad_muxed_analogH <= pad_0_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_0_analog_v));
-         when "01"   => pad_muxed_analogH <= pad_1_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_1_analog_v));
-         when "10"   => pad_muxed_analogH <= pad_2_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_2_analog_v));
-         when others => pad_muxed_analogH <= pad_3_analog_h; pad_muxed_analogV <= std_logic_vector(-signed(pad_3_analog_v));
-      end case;   
-   end process;
-                    
+   command_padindex <= EXT_channel(1 downto 0);
+    
    sdram_burstcount <= x"01";
               
    process (clk1x)
@@ -403,6 +350,8 @@ begin
          eeprom_wren_b <= '0';
          sdram_request <= '0';
          cpak_change   <= '0';
+         command_start <= '0';
+         toPad_ena     <= '0';
          
          if (second_ena = '1' and INITDONE = '0') then
             INITDONE     <= '1';
@@ -748,11 +697,25 @@ begin
                   end if;
                   
                when EXTCOMM_EVALTYPEGAMEPAD =>
-                  pakcrc_value <= (others => '0');
+                  pakcrc_value       <= (others => '0');
+                  toPad_data         <= ram_q_b;
+                  command_sendCnt    <= EXT_send;
+                  command_receiveCnt <= EXT_receive;
+                  receivecount       <= to_unsigned(1, receivecount'length);
                   if (ram_q_b = x"00" or ram_q_b = x"FF") then -- type check
-                     state         <= EXTCOMM_RESPONSETYPE;
+                     state         <= EXTCOMM_RESPONSE_OUT;
+                     command_start <= '1';
+                     toPad_ena     <= '1';
+                     if (EXT_receive > 3) then
+                        EXT_over         <= '1';
+                     end if;
                   elsif (ram_q_b = x"01") then -- pad response
-                     state <= EXTCOMM_RESPONSEPAD;
+                     state         <= EXTCOMM_RESPONSE_OUT;
+                     command_start <= '1';
+                     toPad_ena     <= '1';
+                     if (EXT_receive > 4) then
+                        EXT_over         <= '1';
+                     end if;
                   elsif (ram_q_b = x"02") then -- pad read
                      pakwrite      <= '0';
                      state         <= EXTCOMM_PAK_READADDR1;
@@ -794,67 +757,20 @@ begin
                   end if;
             
                -- responses for gamepad
-               when EXTCOMM_RESPONSETYPE =>
-                  state               <= EXTCOMM_RESPONSE_VALIDOVER;
-                  EXT_valid           <= '1';
-                  EXT_responsedata(0) <= x"05";
-                  EXT_responsedata(1) <= x"00";
-                  if (PADTYPE = "01" or PADTYPE = "10") then
-                     EXT_responsedata(2) <= x"01";
-                  else
-                     EXT_responsedata(2) <= x"02";
+               when EXTCOMM_RESPONSE_OUT =>
+                  EXT_skip          <= '1';
+                  if (toPIF_ena = '1') then
+                     receivecount   <= receivecount + 1;
+                     ram_wren_b     <= '1';
+                     EXT_index      <= EXT_index + 1;
+                     ram_address_b  <= std_logic_vector(EXT_index + 1);
+                     ram_data_b     <= toPIF_data;
+                     if (receivecount >= EXT_receive) then
+                        state       <= EXTCOMM_RESPONSE_VALIDOVER;
+                        EXT_valid   <= '1';
+                     end if;
                   end if;
-               
-               when EXTCOMM_RESPONSEPAD =>
-                  state               <= EXTCOMM_RESPONSE_VALIDOVER;
-                  EXT_valid           <= '1';
-                  if (EXT_receive > 4) then
-                     EXT_over         <= '1';
-                  end if;
-                  
-                  EXT_responsedata(0)(7) <= pad_muxed_A;         
-                  EXT_responsedata(0)(6) <= pad_muxed_B;         
-                  EXT_responsedata(0)(5) <= pad_muxed_C;         
-                  EXT_responsedata(0)(4) <= pad_muxed_START;     
-                  EXT_responsedata(0)(3) <= pad_muxed_DPAD_UP;   
-                  EXT_responsedata(0)(2) <= pad_muxed_DPAD_DOWN; 
-                  EXT_responsedata(0)(1) <= pad_muxed_DPAD_LEFT; 
-                  EXT_responsedata(0)(0) <= pad_muxed_DPAD_RIGHT;
-                  
-                  EXT_responsedata(1)(7 downto 6) <= "00";      
-                  EXT_responsedata(1)(5) <= pad_muxed_L;      
-                  EXT_responsedata(1)(4) <= pad_muxed_R;      
-                  EXT_responsedata(1)(3) <= pad_muxed_C_UP;   
-                  EXT_responsedata(1)(2) <= pad_muxed_C_DOWN; 
-                  EXT_responsedata(1)(1) <= pad_muxed_C_LEFT; 
-                  EXT_responsedata(1)(0) <= pad_muxed_C_RIGHT;
-                  
-                  EXT_responsedata(2) <= pad_muxed_analogH;
-                  EXT_responsedata(3) <= pad_muxed_analogV;
-                  
-                  if (PADDPADSWAP = '1') then
-                     if    (pad_muxed_DPAD_LEFT  = '1' and pad_muxed_DPAD_UP = '0' and pad_muxed_DPAD_DOWN = '0') then EXT_responsedata(2) <= std_logic_vector(to_signed(-85,8));
-                     elsif (pad_muxed_DPAD_RIGHT = '1' and pad_muxed_DPAD_UP = '0' and pad_muxed_DPAD_DOWN = '0') then EXT_responsedata(2) <= std_logic_vector(to_signed(85,8));
-                     elsif (pad_muxed_DPAD_LEFT  = '1')                                                           then EXT_responsedata(2) <= std_logic_vector(to_signed(-69,8));
-                     elsif (pad_muxed_DPAD_RIGHT = '1')                                                           then EXT_responsedata(2) <= std_logic_vector(to_signed(69,8));
-                     else EXT_responsedata(2) <= (others => '0'); end if;
-                     
-                     if    (pad_muxed_DPAD_UP   = '1' and pad_muxed_DPAD_LEFT = '0' and pad_muxed_DPAD_RIGHT = '0') then EXT_responsedata(3) <= std_logic_vector(to_signed(85,8));
-                     elsif (pad_muxed_DPAD_DOWN = '1' and pad_muxed_DPAD_LEFT = '0' and pad_muxed_DPAD_RIGHT = '0') then EXT_responsedata(3) <= std_logic_vector(to_signed(-85,8));
-                     elsif (pad_muxed_DPAD_UP   = '1')                                                              then EXT_responsedata(3) <= std_logic_vector(to_signed(69,8));
-                     elsif (pad_muxed_DPAD_DOWN = '1')                                                              then EXT_responsedata(3) <= std_logic_vector(to_signed(-69,8));
-                     else EXT_responsedata(3) <= (others => '0'); end if;
-                     
-                     EXT_responsedata(0)(3) <= '0';
-                     EXT_responsedata(0)(2) <= '0';
-                     EXT_responsedata(0)(1) <= '0';
-                     EXT_responsedata(0)(0) <= '0';
-                     if (signed(pad_muxed_analogH) >=  64) then EXT_responsedata(0)(0) <= '1'; end if;
-                     if (signed(pad_muxed_analogH) <= -64) then EXT_responsedata(0)(1) <= '1'; end if;
-                     if (signed(pad_muxed_analogV) >=  64) then EXT_responsedata(0)(3) <= '1'; end if;
-                     if (signed(pad_muxed_analogV) <= -64) then EXT_responsedata(0)(2) <= '1'; end if;
-                  end if;
-                  
+
                -- reponses for PAK
                when EXTCOMM_PAK_READADDR1 =>
                   state <= EXTCOMM_PAK_READADDR2;
@@ -1107,8 +1023,16 @@ begin
                   ram_wren_b        <= '1';
                   EXT_index         <= EXT_index + 1;
                   ram_address_b     <= std_logic_vector(EXT_index + 1);
-                  ram_data_b        <= EXT_responsedata(to_integer(EXP_responseindex(2 downto 0)));
                   EXP_responseindex <= EXP_responseindex + 1;
+                  
+                  -- synthesis translate_off
+                  if (EXP_responseindex(1 downto 0) < 3) then
+                  -- synthesis translate_on
+                     ram_data_b  <= EXT_responsedata(to_integer(EXP_responseindex(1 downto 0)));
+                  -- synthesis translate_off
+                  end if;
+                  -- synthesis translate_on
+
             
                when EXTCOMM_RESPONSE_END => 
                   state         <= EXTCOMM_FETCHNEXT;
