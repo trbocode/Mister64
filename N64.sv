@@ -292,7 +292,7 @@ parameter CONF_STR = {
    "P3O[14],Write Z,On,Off;",
    "P3O[15],Read Z,On,Off;",
    "P3O[1],Swap Interlaced,Off,On;",
-   "P3O[49],Pad Speed,Fast,Normal;",
+   "P3O[49],Pad Speed,Normal,Fast;",
    "-;",
    
 	"R0,Reset;",
@@ -672,7 +672,7 @@ n64top
    .PADTYPE2         (status[55:54]),
    .PADTYPE3         (status[57:56]),
    .PADDPADSWAP      (status[60]),
-   .PADSLOW          (status[49]),
+   .PADSLOW          (~status[49]),
    .rumble           (rumble),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),

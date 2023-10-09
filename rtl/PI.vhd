@@ -313,6 +313,8 @@ begin
                            else
                               bus_cart_dataRead <= flash_statusword(31 downto 0);
                            end if;
+                        else 
+                           bus_cart_done <= '1';
                         end if;
                      elsif (bus_cart_addr(28 downto 0) < 16#13FF0000# and cartAvailable = '1') then -- game rom
                         if (PI_STATUS_IObusy = '1') then
@@ -396,6 +398,8 @@ begin
                                  when others => null;
                               end case;
                            end if;
+                        else
+                           bus_cart_done <= '1';
                         end if;
                      else
                         bus_cart_done <= '1';

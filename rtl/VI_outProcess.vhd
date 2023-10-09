@@ -114,13 +114,8 @@ architecture arch of VI_outProcess is
    signal gamma_start_2 : std_logic := '0';
    signal gamma_start_3 : std_logic := '0';
    
-   signal gamma_in_r    : unsigned(13 downto 0);
-   signal gamma_in_g    : unsigned(13 downto 0);
-   signal gamma_in_b    : unsigned(13 downto 0);
-   
-   signal gamma_sqrt_r  : unsigned(7 downto 0);
-   signal gamma_sqrt_g  : unsigned(7 downto 0);
-   signal gamma_sqrt_b  : unsigned(7 downto 0);
+   signal gamma_in      : unsigned(13 downto 0);
+   signal gamma_sqrt    : unsigned(7 downto 0);
 
 begin 
 
@@ -259,11 +254,13 @@ begin
             out_y     <= bi_y;
          end if;
         
+         if (gamma_start_1 = '1') then out_color( 7 downto  0) <= gamma_sqrt; end if;
+         if (gamma_start_2 = '1') then out_color(15 downto  8) <= gamma_sqrt; end if;
+         if (gamma_start_3 = '1') then out_color(23 downto 16) <= gamma_sqrt; end if;
+         
          if (gamma_start_3 = '1') then
             out_pixel <= '1';
          end if;
-         
-         out_color <= gamma_sqrt_b & gamma_sqrt_g & gamma_sqrt_r;
             
          if (VI_GAMMAOFF = '1' or VI_CTRL_GAMMA_ENABLE = '0') then
             out_color <= bi_out(2) & bi_out(1) & bi_out(0);
@@ -316,37 +313,20 @@ begin
    end process;
    
    -- gamma sqrt
-   gamma_in_r <= bi_out(0) & lfsr(5 downto 0)                     when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(0) & 6x"0";
-   gamma_in_g <= bi_out(1) & lfsr(11 downto 6)                    when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(1) & 6x"0";
-   gamma_in_b <= bi_out(2) & lfsr(11 downto 9) & lfsr(2 downto 0) when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else bi_out(2) & 6x"0";
+   gamma_in(13 downto 6) <= bi_out(0) when (gamma_start   = '1') else
+                            bi_out(1) when (gamma_start_1 = '1') else
+                            bi_out(2);
+                            
+   gamma_in(5 downto 0) <=  lfsr(5 downto 0) when (VI_CTRL_GAMMA_DITHER_ENABLE = '1' and VI_NOISEOFF = '0') else 6x"0";                     
    
-   iVI_sqrt_r : entity work.VI_sqrt
+   iVI_sqrt : entity work.VI_sqrt
    port map
    (
       clk        => clk1x,
       start      => gamma_start,
-      val_in     => gamma_in_r,
-      val_out    => gamma_sqrt_r
+      val_in     => gamma_in,
+      val_out    => gamma_sqrt
    );   
-   
-   iVI_sqrt_g : entity work.VI_sqrt
-   port map
-   (
-      clk        => clk1x,
-      start      => gamma_start,
-      val_in     => gamma_in_g,
-      val_out    => gamma_sqrt_g
-   );   
-   
-   iVI_sqrt_b : entity work.VI_sqrt
-   port map
-   (
-      clk        => clk1x,
-      start      => gamma_start,
-      val_in     => gamma_in_b,
-      val_out    => gamma_sqrt_b
-   );
-   
    
 --##############################################################
 --############################### export
