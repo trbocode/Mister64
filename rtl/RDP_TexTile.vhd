@@ -7,25 +7,27 @@ use work.pRDP.all;
 entity RDP_TexTile is
    port 
    (
-      clk1x          : in  std_logic;
-      trigger        : in  std_logic;
-      step2          : in  std_logic;
-      mode2          : in  std_logic;
+      clk1x                : in  std_logic;
+      trigger              : in  std_logic;
+      step2                : in  std_logic;
+      mode2                : in  std_logic;
    
-      coordIn        : in  signed(15 downto 0);
-      tile_max       : in  unsigned(11 downto 0);
-      tile_min       : in  unsigned(11 downto 0);
-      tile_clamp     : in  std_logic;
-      tile_mirror    : in  std_logic;
-      tile_mask      : in  unsigned(3 downto 0);
-      tile_shift     : in  unsigned(3 downto 0);
+      settings_otherModes  : in  tsettings_otherModes;
       
-      index_out      : out unsigned(9 downto 0) := (others => '0');
-      index_out1     : out unsigned(9 downto 0) := (others => '0');
-      index_out2     : out unsigned(9 downto 0) := (others => '0');
-      index_out3     : out unsigned(9 downto 0) := (others => '0');
-      index_outN     : out unsigned(9 downto 0) := (others => '0');
-      frac_out       : out unsigned(4 downto 0) := (others => '0')
+      coordIn              : in  signed(15 downto 0);
+      tile_max             : in  unsigned(11 downto 0);
+      tile_min             : in  unsigned(11 downto 0);
+      tile_clamp           : in  std_logic;
+      tile_mirror          : in  std_logic;
+      tile_mask            : in  unsigned(3 downto 0);
+      tile_shift           : in  unsigned(3 downto 0);
+            
+      index_out            : out unsigned(9 downto 0) := (others => '0');
+      index_out1           : out unsigned(9 downto 0) := (others => '0');
+      index_out2           : out unsigned(9 downto 0) := (others => '0');
+      index_out3           : out unsigned(9 downto 0) := (others => '0');
+      index_outN           : out unsigned(9 downto 0) := (others => '0');
+      frac_out             : out unsigned(4 downto 0) := (others => '0')
    );
 end entity;
 
@@ -67,6 +69,7 @@ architecture arch of RDP_TexTile is
    signal index_calc_2     : unsigned(9 downto 0) := (others => '0');
    signal index_calc_3     : unsigned(9 downto 0) := (others => '0');
    signal index_calc_N     : unsigned(9 downto 0) := (others => '0');
+   signal index_calc_N_mux : unsigned(9 downto 0) := (others => '0');
    
    signal index_1          : unsigned(9 downto 0) := (others => '0');
    signal index_1_N        : unsigned(9 downto 0) := (others => '0');
@@ -179,6 +182,8 @@ begin
 
    end process;
    
+   index_calc_N_mux <= index_calc_N when (settings_otherModes.sampleType = '1') else index_calc;
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
@@ -189,13 +194,13 @@ begin
             index_out1 <= index_calc_1;
             index_out2 <= index_calc_2;
             index_out3 <= index_calc_3;
-            index_1_N  <= index_calc_N;
+            index_1_N  <= index_calc_N_mux;
          end if;
          
          if (step2 = '1') then
             frac_2     <= frac;
             index_2    <= index_calc;
-            index_2_N  <= index_calc_N;
+            index_2_N  <= index_calc_N_mux;
          end if;
       
       end if;

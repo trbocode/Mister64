@@ -105,6 +105,7 @@ architecture arch of etb is
    signal sdram_rnw           : std_logic;
    signal sdram_ena           : std_logic;
    signal sdram_done          : std_logic;     
+   signal sdram_reqprocessed  : std_logic;     
 
    -- RSP emulation
    signal RSP2RDP_rdaddr      : unsigned(11 downto 0) := (others => '0'); 
@@ -179,6 +180,8 @@ begin
       ce                   => '1',           
       reset                => reset_out, 
 
+      DISABLEFILTER        => '0',
+      DISABLEDITHER        => '0',
       write9               => '1',
       read9                => '1',
       wait9                => '1',
@@ -226,7 +229,7 @@ begin
       sdram_granted        => sdramMux_granted(SDRAMMUX_RDP),      
       sdram_done           => sdramMux_done(SDRAMMUX_RDP),      
       sdram_dataRead       => sdram_dataRead,
-      sdram_valid          => sdram_done,    
+      sdram_valid          => (sdram_done and sdram_rnw),    
       
       rdp9fifo_reset       => rdp9fifo_reset,   
       rdp9fifo_Din         => rdp9fifo_Din,     
@@ -265,6 +268,10 @@ begin
    );  
    
    iVI : entity n64.VI
+   generic map
+   (
+      use2Xclock       => '1'
+   )
    port map
    (
       clk1x                => clk1x,        
@@ -272,11 +279,20 @@ begin
       clkvid               => clkvid,        
       ce                   => '1',           
       reset_1x             => reset_out, 
-
+      
+      ISPAL                => '0',
+      CROPBOTTOM           => "00",
+      VI_BILINEAROFF       => '1',
+      VI_GAMMAOFF          => '1',
+      VI_NOISEOFF          => '1',
+      VI_DEDITHEROFF       => '1',
+      VI_AAOFF             => '1',
+      VI_DIVOTOFF          => '1',
+      
       irq_out              => open,
       
       errorEna             => '0',
-      errorCode            => 16x"0",
+      errorCode            => 28x"0",
       fpscountOn           => '0',
       
       rdram_request        => rdram_request(DDR3MUX_VI),   
@@ -287,6 +303,15 @@ begin
       rdram_done           => rdram_done(DDR3MUX_VI),
       ddr3_DOUT            => DDRAM_DOUT,       
       ddr3_DOUT_READY      => DDRAM_DOUT_READY,       
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_VI),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_VI),       
+      sdram_address        => sdramMux_address(SDRAMMUX_VI),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_VI),
+      sdram_granted        => sdramMux_granted(SDRAMMUX_VI),      
+      sdram_done           => sdramMux_done(SDRAMMUX_VI),      
+      sdram_dataRead       => sdram_dataRead,
+      sdram_valid          => (sdram_done and sdram_rnw), 
       
       video_hsync          => open, 
       video_vsync          => open,  
@@ -314,11 +339,18 @@ begin
    ); 
 
    iDDR3Mux : entity n64.DDR3Mux
+   generic map
+   (
+      use2Xclock       => '1'
+   )
    port map
    (
       clk1x            => clk1x,           
       clk2x            => clk2x,           
       clk2xIndex       => clk2xIndex,  
+      
+      slow_in          => "0000",
+      RAMSIZE8         => '1',
                                           
       ddr3_BUSY        => DDRAM_BUSY,       
       ddr3_DOUT        => DDRAM_DOUT,       
@@ -340,6 +372,7 @@ begin
       rdram_done       => rdram_done,      
       rdram_dataRead   => rdram_dataRead,  
 
+      rspfifo_req      => '0',
       rspfifo_reset    => '0',
       rspfifo_Din      => 85x"0",
       rspfifo_Wr       => '0',
@@ -360,7 +393,7 @@ begin
    );   
    
    rdram_request(0) <= '0';
-   rdram_request(3 to 7) <= "00000";
+   rdram_request(2 to 6) <= "00000";
    
    -- extern
    iddrram_model : entity work.ddrram_model
@@ -406,6 +439,7 @@ begin
       sdramMux_writeMask   => sdramMux_writeMask, 
       sdramMux_dataWrite   => sdramMux_dataWrite, 
       sdramMux_granted     => sdramMux_granted,   
+      sdram_reqprocessed   => sdram_reqprocessed,      
       sdramMux_done        => sdramMux_done,      
       sdramMux_dataRead    => sdramMux_dataRead,
       
@@ -422,7 +456,7 @@ begin
       rdp9fifoZ_empty      => rdp9fifoZ_empty
    );
    
-   sdramMux_request(0) <= '0';
+   sdramMux_request(0 to 2) <= "000";
    
    isdram_model : entity work.sdram_model
    generic map
@@ -441,6 +475,7 @@ begin
       be                => sdram_be,
       di                => sdram_dataWrite,
       do                => sdram_dataRead,
+      reqprocessed      => sdram_reqprocessed,
       done              => sdram_done,
       fileSize          => open
    );

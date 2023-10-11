@@ -1076,46 +1076,50 @@ begin
    iRDP_TexTile_S: entity work.RDP_TexTile
    port map
    (
-      clk1x          => clk1x,
-      trigger        => pipeIn_trigger,
-      mode2          => settings_otherModes.cycleType(0),
-      step2          => step2,
+      clk1x                => clk1x,
+      trigger              => pipeIn_trigger,
+      mode2                => settings_otherModes.cycleType(0),
+      step2                => step2,
+      
+      settings_otherModes  => settings_otherModes,
    
-      coordIn        => texture_S_clamped,
-      tile_max       => settings_tile.Tile_sh,
-      tile_min       => settings_tile.Tile_sl,
-      tile_clamp     => settings_tile.Tile_clampS, 
-      tile_mirror    => settings_tile.Tile_mirrorS,
-      tile_mask      => settings_tile.Tile_maskS,  
-      tile_shift     => settings_tile.Tile_shiftS, 
-                     
-      index_out      => texture_S_index,
-      index_out1     => texture_S_index1,
-      index_out2     => texture_S_index2,
-      index_out3     => texture_S_index3,
-      index_outN     => texture_S_indexN,
-      frac_out       => texture_S_frac
+      coordIn              => texture_S_clamped,
+      tile_max             => settings_tile.Tile_sh,
+      tile_min             => settings_tile.Tile_sl,
+      tile_clamp           => settings_tile.Tile_clampS, 
+      tile_mirror          => settings_tile.Tile_mirrorS,
+      tile_mask            => settings_tile.Tile_maskS,  
+      tile_shift           => settings_tile.Tile_shiftS, 
+                           
+      index_out            => texture_S_index,
+      index_out1           => texture_S_index1,
+      index_out2           => texture_S_index2,
+      index_out3           => texture_S_index3,
+      index_outN           => texture_S_indexN,
+      frac_out             => texture_S_frac
    );
    
    iRDP_TexTile_T: entity work.RDP_TexTile
    port map
    (
-      clk1x          => clk1x,
-      trigger        => pipeIn_trigger,
-      mode2          => settings_otherModes.cycleType(0),
-      step2          => step2,
+      clk1x                => clk1x,
+      trigger              => pipeIn_trigger,
+      mode2                => settings_otherModes.cycleType(0),
+      step2                => step2,
    
-      coordIn        => texture_T_clamped,
-      tile_max       => settings_tile.Tile_th,
-      tile_min       => settings_tile.Tile_tl,
-      tile_clamp     => settings_tile.Tile_clampT, 
-      tile_mirror    => settings_tile.Tile_mirrorT,
-      tile_mask      => settings_tile.Tile_maskT,  
-      tile_shift     => settings_tile.Tile_shiftT, 
-                     
-      index_out      => texture_T_index,
-      index_outN     => texture_T_indexN,
-      frac_out       => texture_T_frac
+      settings_otherModes  => settings_otherModes,
+   
+      coordIn              => texture_T_clamped,
+      tile_max             => settings_tile.Tile_th,
+      tile_min             => settings_tile.Tile_tl,
+      tile_clamp           => settings_tile.Tile_clampT, 
+      tile_mirror          => settings_tile.Tile_mirrorT,
+      tile_mask            => settings_tile.Tile_maskT,  
+      tile_shift           => settings_tile.Tile_shiftT, 
+                           
+      index_out            => texture_T_index,
+      index_outN           => texture_T_indexN,
+      frac_out             => texture_T_frac
    );
     
     

@@ -373,7 +373,7 @@ architecture arch of RDP_raster is
    signal load_S_shifted      : unsigned(10 downto 0);
    signal load_bit3flipped    : std_logic;
    signal load_hibit          : std_logic;
-   signal load_linesize       : unsigned(21 downto 0);
+   signal load_linesize       : unsigned(22 downto 0);
    signal load_tbase_mul      : unsigned(21 downto 0);
    signal load_tbase          : unsigned(8 downto 0);
    signal load_tmemAddr0      : unsigned(10 downto 0);
@@ -1136,7 +1136,7 @@ begin
    
    load_bit3flipped <= load_S_shifted(1) xor load_T_corrected(0);
    
-   load_linesize <= lineInfo.Y * (settings_textureImage.tex_width_m1 + 1);
+   load_linesize <= lineInfo.Y * (('0' & settings_textureImage.tex_width_m1) + 1);
    
    load_tbase_mul <= settings_tile.Tile_line * unsigned(load_T_corrected);
    load_tbase     <= load_tbase_mul(8 downto 0) + settings_tile.Tile_TmemAddr;
