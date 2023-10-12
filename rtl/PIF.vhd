@@ -191,7 +191,6 @@ architecture arch of pif is
    signal pifreadmode               : std_logic := '0';
    signal pifProcMode               : std_logic := '0';
    
-   signal EXT_first                 : std_logic := '0';
    signal EXT_channel               : unsigned(5 downto 0) := (others => '0');
    signal EXT_index                 : unsigned(5 downto 0) := (others => '0');
    signal EXT_recindex              : unsigned(5 downto 0) := (others => '0');
@@ -479,7 +478,6 @@ begin
                when IDLE =>
                   pifreadmode <= '0';
                   pifProcMode <= '0';
-                  EXT_first   <= '1';
                   if (SIPIF_ramreq = '1') then
                      state          <= RAMACCESS;
                      SIPIF_ramgrant <= '1';
@@ -537,7 +535,6 @@ begin
                   
                when EVALWRITE =>
                   state     <= CHECKDONE;
-                  EXT_first <= '0';
                   
                   if (unsigned(ram_q_b) > 1) then
                      if (ram_q_b(1) = '1') then -- CIC-NUS-6105 challenge/response
@@ -580,11 +577,6 @@ begin
                         ram_data_b    <= (others => '0');
                         ram_wren_b    <= '1';
                      end if;
-                  elsif (EXT_first = '1') then
-                     state         <= EXTCOMM_FETCHNEXT;
-                     ram_address_b <= (others => '0');
-                     EXT_channel   <= (others => '0');
-                     EXT_index     <= (others => '0');
                   end if;
                   
                when EVALREAD =>
