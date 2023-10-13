@@ -243,7 +243,7 @@ parameter CONF_STR = {
 	//"RH,Save state (Alt-F1);",
 	//"RI,Restore state (F1);",
 	"-;",
-   //"O[59:58],Gamepads,1,2,3,4;",
+   "O[59:58],Gamepads,1,2,3,4;",
    "O[51:50],Pad 1 Pak,None,CPAK,Rumble;",
    "O[53:52],Pad 2 Pak,None,CPAK,Rumble;",
    "O[55:54],Pad 3 Pak,None,CPAK,Rumble;",
@@ -666,7 +666,7 @@ n64top
    .sdram_dataRead    (sdram_dataRead    ),
       
    // pad
-   .PADCOUNT         (3'd3),//(status[59:58]),
+   .PADCOUNT         (status[59:58]),
    .PADTYPE0         (status[51:50]),
    .PADTYPE1         (status[53:52]),
    .PADTYPE2         (status[55:54]),

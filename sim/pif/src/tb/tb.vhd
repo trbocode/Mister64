@@ -13,20 +13,23 @@ end entity;
 
 architecture arch of etb is
 
+   constant PADCOUNT : std_logic_vector(1 downto 0) := "00";
+
    signal clk1x               : std_logic := '1';
    signal reset               : std_logic := '1';
    
-   signal command_start        : std_logic;
-   signal command_padindex     : unsigned(1 downto 0);
-   signal command_sendCnt      : unsigned(5 downto 0);
-   signal command_receiveCnt   : unsigned(5 downto 0);
+   signal command_start       : std_logic;
+   signal command_padindex    : unsigned(1 downto 0);
+   signal command_sendCnt     : unsigned(5 downto 0);
+   signal command_receiveCnt  : unsigned(5 downto 0);
 
-   signal toPad_ena            : std_logic;   
-   signal toPad_data           : std_logic_vector(7 downto 0);          
-   signal toPad_ready          : std_logic;  
+   signal toPad_ena           : std_logic;   
+   signal toPad_data          : std_logic_vector(7 downto 0);          
+   signal toPad_ready         : std_logic;  
    
-   signal toPIF_ena            : std_logic;   
-   signal toPIF_data           : std_logic_vector(7 downto 0);
+   signal toPIF_timeout       : std_logic;   
+   signal toPIF_ena           : std_logic;   
+   signal toPIF_data          : std_logic_vector(7 downto 0);
          
    signal SIPIF_ramreq        : std_logic := '0';
    signal SIPIF_addr          : unsigned(5 downto 0) := (others => '0');
@@ -78,7 +81,7 @@ begin
       ISPAL                => '0',
       EEPROMTYPE           => "01",
       CICTYPE              => "0000",
-      PADCOUNT             => "11",
+      PADCOUNT             => PADCOUNT,
       PADTYPE0             => "01",
       PADTYPE1             => "00",
       PADTYPE2             => "00",
@@ -93,6 +96,7 @@ begin
       toPad_ena            => toPad_ena,         
       toPad_data           => toPad_data,                              
       toPad_ready          => toPad_ready,                              
+      toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data, 
                            
@@ -147,7 +151,7 @@ begin
       clk1x                => clk1x,
       reset                => reset,
      
-      PADCOUNT             => "11",
+      PADCOUNT             => PADCOUNT,
       PADTYPE0             => "01",
       PADTYPE1             => "00",
       PADTYPE2             => "00",
@@ -165,6 +169,7 @@ begin
       toPad_data           => toPad_data,        
       toPad_ready          => toPad_ready,        
                                 
+      toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data,        
 

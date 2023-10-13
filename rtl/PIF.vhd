@@ -17,7 +17,7 @@ entity pif is
       ISPAL                : in  std_logic;
       CICTYPE              : in  std_logic_vector(3 downto 0);
       EEPROMTYPE           : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
-      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1, todo : implement
+      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1
       PADTYPE0             : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
       PADTYPE1             : in  std_logic_vector(1 downto 0);
       PADTYPE2             : in  std_logic_vector(1 downto 0);
@@ -34,6 +34,7 @@ entity pif is
       toPad_ena            : out std_logic := '0';   
       toPad_data           : out std_logic_vector(7 downto 0) := (others => '0');     
       toPad_ready          : in  std_logic;          
+      toPIF_timeout        : in  std_logic;   
       toPIF_ena            : in  std_logic;   
       toPIF_data           : in  std_logic_vector(7 downto 0);
       
@@ -708,7 +709,7 @@ begin
                      if (EXT_receive > 4) then
                         EXT_over         <= '1';
                      end if;
-                  elsif (ram_q_b = x"02") then -- pad read
+                  elsif (ram_q_b = x"02" and EXT_channel <= unsigned(PADCOUNT)) then -- pad read
                      pakwrite      <= '0';
                      state         <= EXTCOMM_PAK_READADDR1;
                      EXT_index     <= EXT_index + 1;
@@ -719,7 +720,7 @@ begin
                         EXT_valid <= '1';
                         EXT_skip  <= '1';
                      end if;
-                  elsif (ram_q_b = x"03") then -- pad write
+                  elsif (ram_q_b = x"03" and EXT_channel <= unsigned(PADCOUNT)) then -- pad write
                      pakwrite      <= '1';
                      state         <= EXTCOMM_PAK_READADDR1;
                      EXT_index     <= EXT_index + 1;
@@ -751,7 +752,10 @@ begin
                -- responses for gamepad
                when EXTCOMM_RESPONSE_OUT =>
                   EXT_skip          <= '1';
-                  if (toPIF_ena = '1') then
+                  if (toPIF_timeout = '1') then
+                     state          <= EXTCOMM_RESPONSE_VALIDOVER;
+                     EXT_index      <= EXT_index + EXT_receive;
+                  elsif (toPIF_ena = '1') then
                      receivecount   <= receivecount + 1;
                      ram_wren_b     <= '1';
                      EXT_index      <= EXT_index + 1;

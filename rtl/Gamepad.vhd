@@ -8,7 +8,7 @@ entity Gamepad is
       clk1x                : in  std_logic;
       reset                : in  std_logic;
      
-      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1, todo : implement
+      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1
       PADTYPE0             : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
       PADTYPE1             : in  std_logic_vector(1 downto 0);
       PADTYPE2             : in  std_logic_vector(1 downto 0);
@@ -26,6 +26,7 @@ entity Gamepad is
       toPad_data           : in  std_logic_vector(7 downto 0); -- byte written to pad
       toPad_ready          : out std_logic := '0';             -- can be used to tell the PIF it has to wait before sending more data to the pad
                            
+      toPIF_timeout        : out std_logic := '0';                                  -- set to 1 for one cycle when no pad is connected/detected
       toPIF_ena            : out std_logic := '0';                                  -- set to 1 for one cycle when new data is send to PIF
       toPIF_data           : out std_logic_vector(7 downto 0) := (others => '0');   -- byte from controller send back to PIF
 
@@ -72,13 +73,17 @@ architecture arch of Gamepad is
    type tState is
    (
       IDLE,
+      TRANSMITWAIT0,
+      
       RESPONSETYPE0,
       RESPONSETYPE1,
       RESPONSETYPE2,
+      
       RESPONSEPAD0,
       RESPONSEPAD1,
       RESPONSEPAD2,
       RESPONSEPAD3,
+      
       SENDEMPTY
    );
    signal state                     : tState := IDLE;
@@ -140,14 +145,13 @@ begin
    end process;
               
    slowNextByteEna <= slowcnt(slowcnt'left) when (PADSLOW = '1') else slowcnt(2);
-   
-   toPad_ready <= '1';
-              
+               
    process (clk1x)
    begin
       if rising_edge(clk1x) then
       
-         toPIF_ena <= '0';
+         toPIF_timeout <= '0';
+         toPIF_ena     <= '0';
          
          if (slowNextByteEna = '1') then
             slowcnt <= (others => '0');
@@ -158,15 +162,27 @@ begin
          case (state) is
             
             when IDLE =>
+               toPad_ready <= '1';
                if (command_start = '1') then
-                  slowcnt <= (others => '0');
-                  if (toPad_data = x"00" or toPad_data = x"FF") then -- type check
-                     state <= RESPONSETYPE0;
-                  elsif (toPad_data = x"01") then -- pad response
-                     state <= RESPONSEPAD0;
-                  end if;
+                  state       <= TRANSMITWAIT0;
+                  toPad_ready <= '0';
+                  slowcnt     <= (others => '0');
                end if;
                
+            when TRANSMITWAIT0 =>
+               if (slowNextByteEna = '1') then
+                  if (command_padindex > unsigned(PADCOUNT)) then
+                     toPIF_timeout <= '1';
+                     state         <= IDLE;
+                  else
+                     if (toPad_data = x"00" or toPad_data = x"FF") then -- type check
+                        state <= RESPONSETYPE0;
+                     elsif (toPad_data = x"01") then -- pad response
+                        state <= RESPONSEPAD0;
+                     end if;
+                  end if;
+               end if;
+             
 ----------------------------- type -------------------------------
             when RESPONSETYPE0 =>
                if (slowNextByteEna = '1') then

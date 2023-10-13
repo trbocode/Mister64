@@ -83,7 +83,7 @@ entity n64top is
       sdram_dataRead          : in  std_logic_vector(31 downto 0);
       
       -- PAD
-      PADCOUNT                : in  std_logic_vector(1 downto 0); -- count - 1, todo : implement
+      PADCOUNT                : in  std_logic_vector(1 downto 0); -- count - 1
       PADTYPE0                : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
       PADTYPE1                : in  std_logic_vector(1 downto 0);
       PADTYPE2                : in  std_logic_vector(1 downto 0);
@@ -350,6 +350,7 @@ architecture arch of n64top is
    signal toPad_ena              : std_logic;   
    signal toPad_data             : std_logic_vector(7 downto 0);          
    signal toPad_ready            : std_logic;  
+   signal toPIF_timeout          : std_logic;   
    signal toPIF_ena              : std_logic;   
    signal toPIF_data             : std_logic_vector(7 downto 0);
    
@@ -967,6 +968,7 @@ begin
       toPad_ena            => toPad_ena,         
       toPad_data           => toPad_data,        
       toPad_ready          => toPad_ready,                              
+      toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data,  
       
@@ -1044,6 +1046,7 @@ begin
       toPad_data           => toPad_data,        
       toPad_ready          => toPad_ready,        
                                 
+      toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data,        
 
