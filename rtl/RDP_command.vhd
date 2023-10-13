@@ -12,15 +12,13 @@ entity RDP_command is
       reset                   : in  std_logic;
          
       error                   : out std_logic := '0';
+      
+      cmdfifo_Din             : in  std_logic_vector(63 downto 0);
+      cmdfifo_wr              : in  std_logic := '0';
+      cmdfifo_nearfull        : out std_logic := '0';
                
-      commandRAMReady         : in  std_logic;
-      CommandData             : in  unsigned(63 downto 0);
-      commandCntNext          : in  unsigned(4 downto 0) := (others => '0');
-               
-      commandRAMPtr_out       : out unsigned(4 downto 0) := (others => '0');
       commandIsIdle           : out std_logic;
-      commandWordDone         : out std_logic := '0';
-      commandAbort            : out std_logic := '0';
+      commandReqData          : out std_logic;
                
       poly_done               : in  std_logic;
       writePixelsDone         : in  std_logic;
@@ -31,6 +29,7 @@ entity RDP_command is
       
       -- synthesis translate_off
       export_command_done     : out std_logic := '0'; 
+      export_command_data     : out unsigned(63 downto 0); 
       -- synthesis translate_on
       
       tile_Command            : out std_logic_vector(2 downto 0) := (others => '0');
@@ -65,7 +64,6 @@ architecture arch of RDP_command is
    type tState is 
    (  
       IDLE, 
-      READCOMMAND,
       EVALCOMMAND,
       EVALTEXRECTANGLE,
       EVALTEXRECTANGLEFLIP,
@@ -78,9 +76,13 @@ architecture arch of RDP_command is
    ); 
    signal state  : tState := IDLE;
    
-   signal commandRAMPtr    : unsigned(4 downto 0) := (others => '0');
-   signal commandAvailable : integer range -31 to 31;
-
+   signal cmdFifo_count    : unsigned(5 downto 0) := (others => '0');
+   signal cmdfifo_Dout     : std_logic_vector(63 downto 0);
+   signal cmdfifo_Rd       : std_logic := '0';
+   signal cmdfifo_Empty    : std_logic;
+   
+   signal CommandData      : unsigned(63 downto 0) := (others => '0');
+   
    -- EVALTRIANGLE
    signal triCnt  : unsigned(2 downto 0);
    signal shade   : std_logic;             
@@ -89,27 +91,52 @@ architecture arch of RDP_command is
 
 begin 
 
-   commandIsIdle <= '1' when (state = IDLE) else '0';
+   iCommandFifo: entity mem.SyncFifoFallThrough
+   generic map
+   (
+      SIZE             => 64,
+      DATAWIDTH        => 64,
+      NEARFULLDISTANCE => 32
+   )
+   port map
+   ( 
+      clk      => clk1x,
+      reset    => reset,  
+      Din      => cmdfifo_Din,     
+      Wr       => cmdfifo_wr,      
+      Full     => open,    
+      NearFull => cmdfifo_nearfull,
+      Dout     => cmdfifo_Dout,    
+      Rd       => cmdfifo_Rd,      
+      Empty    => cmdfifo_Empty   
+   );
 
-   commandRAMPtr_out <= commandRAMPtr;
-
-   commandAvailable <= to_integer(commandCntNext) - to_integer(commandRAMPtr);
+   cmdfifo_Rd <= not cmdfifo_Empty when (state = EVALCOMMAND) else
+                 not cmdfifo_Empty when (state = EVALTEXRECTANGLE) else
+                 not cmdfifo_Empty when (state = EVALTEXRECTANGLEFLIP) else
+                 not cmdfifo_Empty when (state = EVALTRIANGLE) else
+                 not cmdfifo_Empty when (state = EVALSHADE) else
+                 not cmdfifo_Empty when (state = EVALTEXTURE) else
+                 not cmdfifo_Empty when (state = EVALZBUFFER) else
+                 '0';
+                 
+   commandIsIdle  <= '1' when (state = IDLE) else '0';
+   
+   commandReqData <= cmdfifo_Empty when (state = IDLE) else 
+                     cmdfifo_Empty when (state = EVALCOMMAND) else 
+                     cmdfifo_Empty when (state = EVALTEXRECTANGLE) else 
+                     cmdfifo_Empty when (state = EVALTEXRECTANGLEFLIP) else 
+                     cmdfifo_Empty when (state = EVALTRIANGLE) else 
+                     cmdfifo_Empty when (state = EVALSHADE) else 
+                     cmdfifo_Empty when (state = EVALTEXTURE) else 
+                     cmdfifo_Empty when (state = EVALZBUFFER) else 
+                     '0';
+   
+   CommandData <= unsigned(cmdfifo_Dout);
 
    -- synthesis translate_off
-   export_command_done <=  '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"08" and commandAvailable >=  3) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"09" and commandAvailable >=  5) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0A" and commandAvailable >= 11) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0B" and commandAvailable >= 13) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0C" and commandAvailable >= 11) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0D" and commandAvailable >= 13) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0E" and commandAvailable >= 19) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"0F" and commandAvailable >= 21) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"24" and commandAvailable >= 1) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) = 6x"25" and commandAvailable >= 1) else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) < 6x"08") else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) > 6x"0F" and CommandData(61 downto 56) < 6x"24") else 
-                           '1' when (state = EVALCOMMAND and CommandData(61 downto 56) > 6x"25") else 
-                           '0';
+   export_command_done <=  '1' when (state = EVALCOMMAND) else '0';                 
+   export_command_data <= CommandData;
    -- synthesis translate_on
    
    process (clk1x)
@@ -117,63 +144,49 @@ begin
       if rising_edge(clk1x) then
       
          error           <= '0';
-         commandWordDone <= '0';
-         commandAbort    <= '0';
          poly_start      <= '0';
          sync_full       <= '0';
          tileSettings_we <= '0';
          tileSize_we     <= '0';
-      
+         
          if (reset = '1') then
             
-            state <= IDLE;
+            state         <= IDLE;
+            cmdFifo_count <= (others => '0');
             
          else
-            
+         
+            if (cmdfifo_wr = '1' and cmdfifo_Rd = '0') then
+               cmdFifo_count <= cmdFifo_count + 1;
+            elsif (cmdfifo_wr = '0' and cmdfifo_Rd = '1') then
+               cmdFifo_count <= cmdFifo_count - 1;
+            end if;
+               
             case (state) is
             
                when IDLE =>
-                  if (commandRAMReady = '1') then
-                     state         <= READCOMMAND;
-                     commandRAMPtr <= (others => '0');
+                  if (cmdfifo_Empty = '0') then
+                     state         <= EVALCOMMAND;
                   end if;                  
                
-               when READCOMMAND =>
-                  state          <= EVALCOMMAND;
-                  commandRAMPtr  <= commandRAMPtr + 1;
-                  
                when EVALCOMMAND =>
-                  commandRAMPtr   <= commandRAMPtr + 1;
-                  if (commandRAMPtr = commandCntNext) then
-                     state <= IDLE;
-                  end if;
-                  
-                  settings_poly  <= SETTINGSPOLYINIT;
+                  state             <= IDLE;
+                  settings_poly     <= SETTINGSPOLYINIT;
+                  poly_loading_mode <= '0';
 
                   case (CommandData(61 downto 56)) is
                   
                      when 6x"00" => -- NOP
-                        commandWordDone <= '1';                         
+                        null;                        
                         
                      -- triangle commands
                      when 6x"08" | 6x"09" | 6x"0A" | 6x"0B" | 6x"0C" | 6x"0D" | 6x"0E" | 6x"0F" =>
-                        shade          <= CommandData(58); 
-                        texture        <= CommandData(57); 
-                        zbuffer        <= CommandData(56); 
-                        tile_Command   <= std_logic_vector(CommandData(50 downto 48));
-                        tile_usePipe   <= '1';
-                        state          <= IDLE;
-                        if (commandRAMPtr = 1) then
-                           commandAbort   <= '1';
-                        end if;
-                        if (CommandData(61 downto 56) = 6x"08" and commandAvailable >=  3) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"09" and commandAvailable >=  5) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0A" and commandAvailable >= 11) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0B" and commandAvailable >= 13) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0C" and commandAvailable >= 11) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0D" and commandAvailable >= 13) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0E" and commandAvailable >= 19) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
-                        if (CommandData(61 downto 56) = 6x"0F" and commandAvailable >= 21) then commandWordDone <= '1'; state <= EVALTRIANGLE; commandAbort <= '0'; end if;
+                        shade                     <= CommandData(58); 
+                        texture                   <= CommandData(57); 
+                        zbuffer                   <= CommandData(56); 
+                        tile_Command              <= std_logic_vector(CommandData(50 downto 48));
+                        tile_usePipe              <= '1';
+                        state                     <= EVALTRIANGLE;
                         triCnt                    <= (others => '0');
                         settings_poly.lft         <= CommandData(55);
                         settings_poly.maxLODlevel <= CommandData(53 downto 51);
@@ -183,17 +196,9 @@ begin
                         settings_poly.YH          <= signed(CommandData(14 downto  0));
                         
                      when 6x"24" | 6x"25" => -- texture rectangle
-                        if (commandAvailable >= 1) then
-                           commandWordDone <= '1';
-                           state           <= EVALTEXRECTANGLE;  
-                           if (CommandData(56) = '1') then
-                              state        <= EVALTEXRECTANGLEFLIP; 
-                           end if;
-                        else
-                           state           <= IDLE;
-                           if (commandRAMPtr = 1) then
-                              commandAbort   <= '1';
-                           end if;
+                        state           <= EVALTEXRECTANGLE;  
+                        if (CommandData(56) = '1') then
+                           state        <= EVALTEXRECTANGLEFLIP; 
                         end if;
                      
                         tile_Command           <= std_logic_vector(CommandData(26 downto 24));
@@ -215,24 +220,18 @@ begin
                         end if;
                         
                      when 6x"26" => -- sync load
-                        commandWordDone <= '1';
-                        -- todo   
+                        null; -- todo   
                         
                      when 6x"27" => -- sync pipe
-                        commandWordDone <= '1';
-                        -- todo                       
+                        null; -- todo                       
                         
                      when 6x"28" => -- sync tile
-                        commandWordDone <= '1';
-                        -- todo                     
+                        null; -- todo                     
                         
                      when 6x"29" => -- sync full
-                        commandWordDone <= '1';
-                        sync_full       <= '1';
-                        -- todo
+                        sync_full       <= '1'; -- todo
                         
                      when 6x"2A" => -- set key GB
-                        commandWordDone <= '1';
                         settings_KEYRGB.scale_B  <= CommandData( 7 downto  0);
                         settings_KEYRGB.center_B <= CommandData(15 downto  8);
                         settings_KEYRGB.scale_G  <= CommandData(23 downto 16);
@@ -241,13 +240,11 @@ begin
                         settings_KEYRGB.width_G  <= CommandData(55 downto 44);
                         
                      when 6x"2B" => -- set key R
-                        commandWordDone <= '1';
                         settings_KEYRGB.scale_R  <= CommandData( 7 downto  0);
                         settings_KEYRGB.center_R <= CommandData(15 downto  8);
                         settings_KEYRGB.width_R  <= CommandData(27 downto 16);
                         
                      when 6x"2C" => -- set convert
-                        commandWordDone <= '1';
                         settings_Convert.K5 <= signed(CommandData( 8 downto  0));
                         settings_Convert.K4 <= signed(CommandData(17 downto  9));
                         settings_Convert.K3 <= signed(CommandData(26 downto 18));
@@ -256,7 +253,6 @@ begin
                         settings_Convert.K0 <= signed(CommandData(53 downto 45));
                   
                      when 6x"2D" => -- set scissor
-                        commandWordDone <= '1';
                         settings_scissor.ScissorXL    <= CommandData(23 downto 12);
                         settings_scissor.ScissorXH    <= CommandData(55 downto 44);
                         settings_scissor.ScissorYL    <= CommandData(11 downto  0);
@@ -265,12 +261,10 @@ begin
                         settings_scissor.ScissorOdd   <= CommandData(24);
                         
                      when 6x"2E" => -- set primitive depth
-                        commandWordDone <= '1';
                         settings_Z.Delta_Z        <= CommandData(15 downto 0);
                         settings_Z.Primitive_Z    <= CommandData(30 downto 16);
                   
                      when 6x"2F" => -- set other modes
-                        commandWordDone <= '1';
                         settings_otherModes.alphaCompare    <= CommandData(0);
                         settings_otherModes.ditherAlpha     <= CommandData(1);
                         settings_otherModes.zSourceSel      <= CommandData(2);
@@ -309,12 +303,10 @@ begin
                         settings_otherModes.cycleType       <= CommandData(53 downto 52);
                         settings_otherModes.atomicPrim      <= CommandData(55);
                      
-                     when 6x"30" | 6x"34" => -- load tlut and load tile
-                        commandWordDone        <= '1';  
+                     when 6x"30" | 6x"34" => -- load tlut and load tile 
                         poly_start             <= '1';
                         poly_loading_mode      <= '1';
-                        state                  <= WAITRASTER;   
-                        commandRAMPtr          <= commandRAMPtr;                        
+                        state                  <= WAITRASTER;                          
                         tile_Command           <= std_logic_vector(CommandData(26 downto 24));
                         tile_usePipe           <= '0';
                         tileSize_WrAddr        <= std_logic_vector(CommandData(26 downto 24));
@@ -350,18 +342,15 @@ begin
                         settings_poly.tex_DsDy        <= (others => '0');
                         settings_poly.tex_DtDy        <= x"00200000";
                         
-                     when 6x"32" => -- set tile size
-                        commandWordDone        <= '1';        
+                     when 6x"32" => -- set tile size      
                         tileSize_WrAddr        <= std_logic_vector(CommandData(26 downto 24));
                         tileSize_WrData        <= std_logic_vector(CommandData(55 downto 32)) & std_logic_vector(CommandData(23 downto 0));
                         tileSize_we            <= '1'; 
                      
-                     when 6x"33" => -- load block
-                        commandWordDone        <= '1';  
+                     when 6x"33" => -- load block  
                         poly_start             <= '1';
                         poly_loading_mode      <= '1';
-                        state                  <= WAITRASTER;   
-                        commandRAMPtr          <= commandRAMPtr;                        
+                        state                  <= WAITRASTER;                         
                         tile_Command           <= std_logic_vector(CommandData(26 downto 24));
                         tile_usePipe           <= '0';
                         tileSize_WrAddr        <= std_logic_vector(CommandData(26 downto 24));
@@ -393,17 +382,13 @@ begin
                         settings_poly.tex_DsDy        <= (others => '0');
                         settings_poly.tex_DtDy        <= x"00200000";
                      
-                     when 6x"35" => -- set tile
-                        commandWordDone        <= '1';        
+                     when 6x"35" => -- set tile      
                         tileSettings_WrAddr    <= std_logic_vector(CommandData(26 downto 24));
                         tileSettings_WrData    <= std_logic_vector(CommandData(55 downto 51)) & std_logic_vector(CommandData(49 downto 32)) & std_logic_vector(CommandData(23 downto 0));
                         tileSettings_we        <= '1';                          
                         
                      when 6x"36" => -- fill rectangle
-                        commandWordDone            <= '1';
                         poly_start                 <= '1';
-                        poly_loading_mode          <= '0';
-                        commandRAMPtr              <= commandRAMPtr;
                         state                      <= WAITRASTER;
                         tile_Command               <= (others => '0');
                         tile_usePipe               <= '0';
@@ -424,25 +409,21 @@ begin
                         end if;
                         
                      when 6x"37" => -- set fill color
-                        commandWordDone <= '1';
                         settings_fillcolor.color    <= CommandData(31 downto 0);                      
                         
                      when 6x"38" => -- set fog color
-                        commandWordDone <= '1';
                         settings_fogcolor.fog_A  <= CommandData( 7 downto  0);
                         settings_fogcolor.fog_B  <= CommandData(15 downto  8);
                         settings_fogcolor.fog_G  <= CommandData(23 downto 16);
                         settings_fogcolor.fog_R  <= CommandData(31 downto 24);
                         
                      when 6x"39" => -- set blend color
-                        commandWordDone <= '1';
                         settings_blendcolor.blend_A  <= CommandData( 7 downto  0);
                         settings_blendcolor.blend_B  <= CommandData(15 downto  8);
                         settings_blendcolor.blend_G  <= CommandData(23 downto 16);
                         settings_blendcolor.blend_R  <= CommandData(31 downto 24);
                         
                      when 6x"3A" => -- set prim color
-                        commandWordDone <= '1';
                         settings_primcolor.prim_A          <= CommandData( 7 downto  0);
                         settings_primcolor.prim_B          <= CommandData(15 downto  8);
                         settings_primcolor.prim_G          <= CommandData(23 downto 16);
@@ -451,14 +432,12 @@ begin
                         settings_primcolor.prim_minLevel   <= CommandData(44 downto 40);
                         
                      when 6x"3B" => -- set environment color
-                        commandWordDone <= '1';
                         settings_envcolor.env_A  <= CommandData( 7 downto  0);
                         settings_envcolor.env_B  <= CommandData(15 downto  8);
                         settings_envcolor.env_G  <= CommandData(23 downto 16);
                         settings_envcolor.env_R  <= CommandData(31 downto 24);
                         
                      when 6x"3C" => -- set combine mode
-                        commandWordDone <= '1';
                         settings_combineMode.combine_add_A_1      <= CommandData( 2 downto  0);                     
                         settings_combineMode.combine_sub_b_A_1    <= CommandData( 5 downto  3);                     
                         settings_combineMode.combine_add_R_1      <= CommandData( 8 downto  6);                     
@@ -477,18 +456,15 @@ begin
                         settings_combineMode.combine_sub_a_R_0    <= CommandData(55 downto 52);                     
                         
                      when 6x"3D" => -- set texture image
-                        commandWordDone <= '1';
                         settings_textureImage.tex_base      <= CommandData(24 downto 0);
                         settings_textureImage.tex_width_m1  <= CommandData(41 downto 32);
                         settings_textureImage.tex_size      <= CommandData(52 downto 51);
                         settings_textureImage.tex_format    <= CommandData(55 downto 53);
                         
                      when 6x"3E" => -- set Z image
-                        commandWordDone <= '1';
                         settings_Z_base <= CommandData(24 downto 0);
                         
                      when 6x"3F" => -- set color image
-                        commandWordDone <= '1';
                         settings_colorImage.FB_base      <= CommandData(24 downto 0);
                         settings_colorImage.FB_width_m1  <= CommandData(41 downto 32);
                         settings_colorImage.FB_size      <= CommandData(52 downto 51);
@@ -496,7 +472,6 @@ begin
                      
                      when others => 
                         error <= '1';
-                        commandWordDone <= '1';
                         -- synthesis translate_off
                         report to_hstring(CommandData(61 downto 56));
                         -- synthesis translate_on
@@ -505,12 +480,10 @@ begin
                   end case; -- command
                   
                when EVALTEXRECTANGLE | EVALTEXRECTANGLEFLIP =>
-                  commandRAMPtr          <= commandRAMPtr + 1;
-                  commandWordDone        <= '1';
-                  state                  <= WAITRASTER;
-                  commandRAMPtr          <= commandRAMPtr;
-                  poly_start             <= '1';
-                  poly_loading_mode      <= '0';
+                  if (cmdfifo_Empty = '0') then
+                     state                  <= WAITRASTER;
+                     poly_start             <= '1';
+                  end if;
                   
                   settings_poly.tex_Texture_S   <= signed(CommandData(63 downto 48)) & 16x"0";
                   settings_poly.tex_Texture_T   <= signed(CommandData(47 downto 32)) & 16x"0";
@@ -526,9 +499,10 @@ begin
                   end if;   
             
                when EVALTRIANGLE =>
-                  commandRAMPtr   <= commandRAMPtr + 1;
-                  commandWordDone <= '1';
-                  triCnt <= triCnt + 1;
+                  if (cmdfifo_Empty = '0') then
+                     triCnt <= triCnt + 1;
+                  end if;
+                     
                   case (to_integer(triCnt)) is
                      when 0 =>
                         settings_poly.XL       <= signed(CommandData(63 downto 32));
@@ -539,29 +513,30 @@ begin
                      when 2 =>
                         settings_poly.XM       <= signed(CommandData(63 downto 32));
                         settings_poly.DXMDy    <= signed(CommandData(29 downto  0));
-                        if (shade = '1') then 
-                           state  <= EVALSHADE;
-                           triCnt <= (others => '0');
-                        elsif (texture = '1') then
-                           state  <= EVALTEXTURE;
-                           triCnt <= (others => '0');
-                        elsif (zbuffer = '1') then
-                           state  <= EVALZBUFFER;
-                           triCnt <= (others => '0');
-                        else
-                           state                  <= WAITRASTER;
-                           commandRAMPtr          <= commandRAMPtr;
-                           poly_start             <= '1';
-                           poly_loading_mode      <= '0';
+                        if (cmdfifo_Empty = '0') then
+                           if (shade = '1') then 
+                              state  <= EVALSHADE;
+                              triCnt <= (others => '0');
+                           elsif (texture = '1') then
+                              state  <= EVALTEXTURE;
+                              triCnt <= (others => '0');
+                           elsif (zbuffer = '1') then
+                              state  <= EVALZBUFFER;
+                              triCnt <= (others => '0');
+                           else
+                              state                  <= WAITRASTER;
+                              poly_start             <= '1';
+                           end if;
                         end if;
                         
                      when others => null;
                   end case;
                   
                when EVALSHADE =>
-                  commandRAMPtr   <= commandRAMPtr + 1;
-                  commandWordDone <= '1';
-                  triCnt <= triCnt + 1;
+                  if (cmdfifo_Empty = '0') then
+                     triCnt <= triCnt + 1;
+                  end if;
+                  
                   case (to_integer(triCnt)) is
                      when 0 =>
                         settings_poly.shade_Color_R(31 downto 16) <= signed(CommandData(63 downto 48));
@@ -603,26 +578,27 @@ begin
                         settings_poly.shade_DgDy(15 downto 0) <= signed(CommandData(47 downto 32));
                         settings_poly.shade_DbDy(15 downto 0) <= signed(CommandData(31 downto 16));
                         settings_poly.shade_DaDy(15 downto 0) <= signed(CommandData(15 downto  0));
-                        if (texture = '1') then
-                           state  <= EVALTEXTURE;
-                           triCnt <= (others => '0');
-                        elsif (zbuffer = '1') then
-                           state  <= EVALZBUFFER;
-                           triCnt <= (others => '0');
-                        else
-                           state                  <= WAITRASTER;
-                           commandRAMPtr          <= commandRAMPtr;
-                           poly_start             <= '1';
-                           poly_loading_mode      <= '0';
+                        if (cmdfifo_Empty = '0') then
+                           if (texture = '1') then
+                              state  <= EVALTEXTURE;
+                              triCnt <= (others => '0');
+                           elsif (zbuffer = '1') then
+                              state  <= EVALZBUFFER;
+                              triCnt <= (others => '0');
+                           else
+                              state                  <= WAITRASTER;
+                              poly_start             <= '1';
+                           end if;
                         end if;
                         
                      when others => null;
                   end case;
                
                when EVALTEXTURE =>
-                  commandRAMPtr   <= commandRAMPtr + 1;
-                  commandWordDone <= '1';
-                  triCnt <= triCnt + 1;
+                  if (cmdfifo_Empty = '0') then
+                     triCnt <= triCnt + 1;
+                  end if;
+                  
                   case (to_integer(triCnt)) is
                      when 0 =>
                         settings_poly.tex_Texture_S(31 downto 16) <= signed(CommandData(63 downto 48));
@@ -656,34 +632,35 @@ begin
                         settings_poly.tex_DsDy(15 downto 0) <= signed(CommandData(63 downto 48));
                         settings_poly.tex_DtDy(15 downto 0) <= signed(CommandData(47 downto 32));
                         settings_poly.tex_DwDy(15 downto 0) <= signed(CommandData(31 downto 16));
-                        if (zbuffer = '1') then
-                           state  <= EVALZBUFFER;
-                           triCnt <= (others => '0');
-                        else
-                           state                  <= WAITRASTER;
-                           commandRAMPtr          <= commandRAMPtr;
-                           poly_start             <= '1';
-                           poly_loading_mode      <= '0';
+                        if (cmdfifo_Empty = '0') then
+                           if (zbuffer = '1') then
+                              state  <= EVALZBUFFER;
+                              triCnt <= (others => '0');
+                           else
+                              state                  <= WAITRASTER;
+                              poly_start             <= '1';
+                           end if;
                         end if;
                         
                      when others => null;
                   end case;
 
                when EVALZBUFFER =>
-                  commandRAMPtr   <= commandRAMPtr + 1;
-                  commandWordDone <= '1';
-                  triCnt <= triCnt + 1;
+                  if (cmdfifo_Empty = '0') then
+                     triCnt <= triCnt + 1;
+                  end if;
+                  
                   case (to_integer(triCnt)) is
                      when 0 =>
                         settings_poly.zBuffer_Z    <= signed(CommandData(63 downto 32));
                         settings_poly.zBuffer_DzDx <= signed(CommandData(31 downto  0));
                      when 1 =>
                         settings_poly.zBuffer_DzDe <= signed(CommandData(63 downto 32));
-                        settings_poly.zBuffer_DzDy <= signed(CommandData(31 downto  0));                     
-                        state                  <= WAITRASTER;
-                        commandRAMPtr          <= commandRAMPtr;
-                        poly_start             <= '1';
-                        poly_loading_mode      <= '0';
+                        settings_poly.zBuffer_DzDy <= signed(CommandData(31 downto  0));       
+                        if (cmdfifo_Empty = '0') then                        
+                           state                  <= WAITRASTER;
+                           poly_start             <= '1';
+                        end if;
                         
                      when others => null;
                   end case;
@@ -695,12 +672,7 @@ begin
                   
                when WAITPIXELWRITE =>
                   if (writePixelsDone = '1') then
-                     if (commandRAMPtr = commandCntNext) then
-                        state <= IDLE;
-                     else
-                        state         <= EVALCOMMAND;
-                        commandRAMPtr <= commandRAMPtr + 1;
-                     end if;
+                     state <= IDLE;
                   end if;
             
             end case; -- state

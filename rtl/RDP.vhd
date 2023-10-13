@@ -20,6 +20,7 @@ entity RDP is
       error_combineAlpha   : out std_logic;
       error_texMode        : out std_logic; 
       error_drawMode       : out std_logic; 
+      error_RDPMEMMUX      : out std_logic; 
       
       DISABLEFILTER        : in  std_logic;
       DISABLEDITHER        : in  std_logic;
@@ -93,7 +94,6 @@ entity RDP is
       RSP2RDP_rdaddr       : out unsigned(11 downto 0) := (others => '0'); 
       RSP2RDP_len          : out unsigned(4 downto 0) := (others => '0'); 
       RSP2RDP_req          : out std_logic := '0';
-      RSP2RDP_wraddr       : in  unsigned(4 downto 0);
       RSP2RDP_data         : in  std_logic_vector(63 downto 0);
       RSP2RDP_we           : in  std_logic;
       RSP2RDP_done         : in  std_logic;
@@ -143,17 +143,23 @@ architecture arch of RDP is
    signal SDRAM_fillAddr            : unsigned(7 downto 0) := (others => '0');
    
    signal commandRAMstore           : std_logic := '0';
-   signal commandRAMReady           : std_logic := '0';
    signal commandRAMMux             : std_logic := '0';
-   signal CommandData_RAM           : std_logic_vector(63 downto 0);
-   signal CommandData_RSP           : std_logic_vector(63 downto 0);
-   signal CommandData               : std_logic_vector(63 downto 0);
    signal commandCntNext            : unsigned(4 downto 0) := (others => '0');
-   signal commandRAMPtr             : unsigned(4 downto 0);
    signal commandIsIdle             : std_logic;
-   signal commandWordDone           : std_logic;
-   signal commandAbort              : std_logic;
+   signal commandReqData            : std_logic;
    signal commandSyncFull           : std_logic;
+   
+   signal cmdDDR3copy_Addr          : unsigned(4 downto 0) := (others => '0');
+   signal cmdDDR3copy_Data          : std_logic_vector(63 downto 0);
+   signal cmdDDR3copy_We            : std_logic := '0';
+   signal cmdDDR3copy_active        : std_logic := '0';
+   
+   signal cmdRSPcopy_active         : std_logic := '0';
+   
+   signal cmdfifo_Din               : std_logic_vector(63 downto 0);
+   signal cmdfifo_wr                : std_logic := '0';
+   signal cmdfifo_wr_1              : std_logic := '0';
+   signal cmdfifo_nearfull          : std_logic;
    
    -- Texture request ram
    signal TextureReqRAMreq          : std_logic;
@@ -353,6 +359,7 @@ architecture arch of RDP is
    --export
    -- synthesis translate_off
    signal export_command_done       : std_logic; 
+   signal export_command_data       : unsigned(63 downto 0); 
    signal export_command_array      : rdp_export_type;
    
    signal export_line_done          : std_logic; 
@@ -422,6 +429,10 @@ begin
          sdram_request       <= '0';
          TextureReqRAMReady  <= '0';
          FBdone              <= '0';
+         cmdDDR3copy_We      <= '0';
+         error_RDPMEMMUX     <= '0';
+         
+         cmdfifo_wr_1 <= cmdfifo_wr;
       
          if (reset = '1') then
             
@@ -447,7 +458,6 @@ begin
             bus_write_latched        <= '0';
             
             DPC_END                  <= ss_in(0)(47 downto 24); --(others => '0');
-            commandRAMReady          <= '0';
             memState                 <= MEMIDLE;
             
          else
@@ -507,7 +517,7 @@ begin
                   bus_write_latched <= '1';
                end if;
                
-               if (commandWordDone = '1') then
+               if (cmdfifo_wr = '1') then
                   DPC_CURRENT   <= DPC_CURRENT + 8;
                end if;
                
@@ -569,7 +579,7 @@ begin
 
                   end case;
                   
-               elsif ((DPC_STATUS_dma_busy = '1' and DPC_CURRENT >= DPC_END) or commandAbort = '1') then
+               elsif (DPC_STATUS_dma_busy = '1' and DPC_CURRENT >= DPC_END) then
                
                   if (DPC_STATUS_end_pending = '1') then
                      DPC_STATUS_start_pending <= '0';
@@ -585,6 +595,23 @@ begin
             end if; -- ce
          
          end if; -- no reset
+         
+         if (cmdDDR3copy_active = '1') then
+            cmdDDR3copy_Addr <= cmdDDR3copy_Addr + 1;
+            if (cmdDDR3copy_Addr >= commandCntNext) then
+               cmdDDR3copy_active <= '0';
+            else
+               cmdDDR3copy_We     <= '1';
+            end if;
+         end if;
+         
+         if (RSP2RDP_done = '1') then
+            cmdRSPcopy_active <= '0';
+         end if;
+         
+         if (memState /= MEMIDLE and (TextureReqRAMreq = '1' or FBreq = '1')) then
+            error_RDPMEMMUX <= '1';
+         end if;
             
          -- memory statemachine
          case (memState) is
@@ -638,7 +665,7 @@ begin
                   sdram_address     <= 7x"0" & FB_req_addr(22 downto 5) & "00";
                   sdram_burstcount  <=  '0' & to_unsigned((to_integer(FBsize) + 31) / 16,7);
                   
-               elsif (DPC_STATUS_freeze = '0' and commandRAMReady = '0' and commandIsIdle = '1' and commandWordDone = '0' and DPC_STATUS_dma_busy = '1' and commandAbort = '0') then
+               elsif (DPC_STATUS_freeze = '0' and cmdfifo_nearfull = '0' and commandReqData = '1' and cmdDDR3copy_active = '0' and cmdRSPcopy_active = '0' and cmdfifo_wr_1 = '0' and DPC_STATUS_dma_busy = '1') then
                   if (DPC_CURRENT < DPC_END) then
                      memState          <= WAITCOMMANDDATA;
                      commandRAMMux     <= DPC_STATUS_xbus_dmem_dma;
@@ -660,9 +687,13 @@ begin
                end if;
                
             when WAITCOMMANDDATA =>
-               if (rdram_done = '1' or RSP2RDP_done = '1') then
-                  commandRAMReady   <= '1';
-                  memState          <= MEMIDLE;
+               if (RSP2RDP_we = '1') then
+                  memState           <= MEMIDLE;
+                  cmdRSPcopy_active  <= not RSP2RDP_done;
+               elsif (rdram_done = '1') then
+                  memState           <= MEMIDLE;
+                  cmdDDR3copy_active <= '1';
+                  cmdDDR3copy_Addr   <= (others => '0');
                end if;
                
             when WAITTEXTUREDATA =>
@@ -714,10 +745,6 @@ begin
                end if;
          
          end case;
-  
-         if (commandIsIdle = '1' and commandRAMReady = '1') then
-            commandRAMReady <= '0';
-         end if;
 
       end if;
    end process;
@@ -755,7 +782,7 @@ begin
       end if;
    end process; 
    
-   iCommandRAM: entity mem.dpram
+   iCommandCopyRAM: entity mem.dpram
    generic map 
    ( 
       addr_width  => 5,
@@ -769,34 +796,15 @@ begin
       wren_a      => (ddr3_DOUT_READY and commandRAMstore),
       
       clock_b     => clk1x,
-      address_b   => std_logic_vector(commandRAMPtr),
+      address_b   => std_logic_vector(cmdDDR3copy_Addr),
       data_b      => 64x"0",
       wren_b      => '0',
-      q_b         => CommandData_RAM
+      q_b         => cmdDDR3copy_Data
    );   
-   
-   iCommandRSP: entity mem.dpram
-   generic map 
-   ( 
-      addr_width  => 5,
-      data_width  => 64
-   )
-   port map
-   (
-      clock_a     => clk1x,
-      address_a   => std_logic_vector(RSP2RDP_wraddr),
-      data_a      => RSP2RDP_data,
-      wren_a      => RSP2RDP_we,
-      
-      clock_b     => clk1x,
-      address_b   => std_logic_vector(commandRAMPtr),
-      data_b      => 64x"0",
-      wren_b      => '0',
-      q_b         => CommandData_RSP
-   );   
-   
-   CommandData <= CommandData_RSP when (commandRAMMux = '1') else CommandData_RAM;
-   
+    
+   cmdfifo_Din <= RSP2RDP_data when (commandRAMMux = '1') else cmdDDR3copy_Data;
+   cmdfifo_wr  <= RSP2RDP_we   when (commandRAMMux = '1') else cmdDDR3copy_We;
+
    iRDP_command : entity work.RDP_command
    port map
    (
@@ -804,15 +812,13 @@ begin
       reset                   => reset,          
    
       error                   => command_error,
+      
+      cmdfifo_Din             => cmdfifo_Din,
+      cmdfifo_wr              => cmdfifo_wr,
+      cmdfifo_nearfull        => cmdfifo_nearfull,
                                           
-      commandRAMReady         => commandRAMReady,
-      CommandData             => unsigned(CommandData),    
-      commandCntNext          => commandCntNext, 
-                                                
-      commandRAMPtr_out       => commandRAMPtr,  
       commandIsIdle           => commandIsIdle,  
-      commandWordDone         => commandWordDone,
-      commandAbort            => commandAbort,
+      commandReqData          => commandReqData,  
          
       poly_done               => poly_done,       
       writePixelsDone         => writePixelsDone,       
@@ -823,6 +829,7 @@ begin
 
       -- synthesis translate_off
       export_command_done     => export_command_done, 
+      export_command_data     => export_command_data, 
       -- synthesis translate_on      
                               
       tile_Command            => tile_Command,         
@@ -1598,10 +1605,9 @@ begin
                write(line_out, string'("Command: I ")); 
                write(line_out, to_string_len(tracecounts_out(2) + 1, 8));
                write(line_out, string'(" A ")); 
-               --write(line_out, to_hstring(export_command_array.addr + (commandRAMPtr - 1) * 8));
                write(line_out, to_hstring(to_unsigned(0, 32)));
                write(line_out, string'(" D "));
-               write(line_out, to_hstring(CommandData));
+               write(line_out, to_hstring(export_command_data));
                writeline(outfile, line_out);
                tracecounts_out(2) <= tracecounts_out(2) + 1;
             end if;

@@ -53,7 +53,6 @@ entity RSP is
       RSP2RDP_rdaddr       : in  unsigned(11 downto 0); 
       RSP2RDP_len          : in  unsigned(4 downto 0); 
       RSP2RDP_req          : in  std_logic;
-      RSP2RDP_wraddr       : out unsigned(4 downto 0) := (others => '0');
       RSP2RDP_data         : out std_logic_vector(63 downto 0) := (others => '0');
       RSP2RDP_we           : out std_logic := '0';
       RSP2RDP_done         : out std_logic := '0';
@@ -509,7 +508,6 @@ begin
                      RSP2RDP_req_latched     <= '0';
                      MEMSTATE                <= MEM_STARTDMA_RDP;
                      mem_address_a           <= std_logic_vector(RSP2RDP_rdaddr(11 downto 3));
-                     RSP2RDP_wraddr          <= (others => '0');
                      SP_DMA_CURRENT_FETCHLEN <= to_integer(RSP2RDP_len);
                      
                   end if;
@@ -581,9 +579,6 @@ begin
                   SP_DMA_CURRENT_FETCHLEN <= SP_DMA_CURRENT_FETCHLEN - 1;
                   RSP2RDP_we   <= '1';
                   RSP2RDP_data <= byteswap64(dmem_q_a);
-                  if (RSP2RDP_we = '1') then
-                     RSP2RDP_wraddr <= RSP2RDP_wraddr + 1;
-                  end if;
             
             end case;
 

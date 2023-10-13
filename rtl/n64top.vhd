@@ -195,6 +195,7 @@ architecture arch of n64top is
    signal errorDDR3_outRDPZ      : std_logic;
    signal errorRSP_PCON          : std_logic;
    signal error_vi               : std_logic;
+   signal error_RDPMEMMUX        : std_logic;
   
    -- irq
    signal irqRequest             : std_logic;
@@ -376,7 +377,6 @@ architecture arch of n64top is
    signal RSP2RDP_rdaddr         : unsigned(11 downto 0); 
    signal RSP2RDP_len            : unsigned(4 downto 0); 
    signal RSP2RDP_req            : std_logic;
-   signal RSP2RDP_wraddr         : unsigned(4 downto 0);
    signal RSP2RDP_data           : std_logic_vector(63 downto 0);
    signal RSP2RDP_we             : std_logic;
    signal RSP2RDP_done           : std_logic;
@@ -491,8 +491,9 @@ begin
    process (reset_intern_1x, errorDDR3_outRDPZ    ) begin if (errorDDR3_outRDPZ     = '1') then errorCode(22) <= '1'; elsif (reset_intern_1x = '1') then errorCode(22) <= '0'; end if; end process;
    process (reset_intern_1x, errorRSP_PCON        ) begin if (errorRSP_PCON         = '1') then errorCode(23) <= '1'; elsif (reset_intern_1x = '1') then errorCode(23) <= '0'; end if; end process;
    process (reset_intern_1x, error_vi             ) begin if (error_vi              = '1') then errorCode(24) <= '1'; elsif (reset_intern_1x = '1') then errorCode(24) <= '0'; end if; end process;
+   process (reset_intern_1x, error_RDPMEMMUX      ) begin if (error_RDPMEMMUX       = '1') then errorCode(25) <= '1'; elsif (reset_intern_1x = '1') then errorCode(25) <= '0'; end if; end process;
    
-   errorCode(27 downto 25) <= "000";
+   errorCode(27 downto 26) <= "00";
    
    process (clk1x)
    begin
@@ -553,7 +554,6 @@ begin
       RSP2RDP_rdaddr       => RSP2RDP_rdaddr, 
       RSP2RDP_len          => RSP2RDP_len,    
       RSP2RDP_req          => RSP2RDP_req,    
-      RSP2RDP_wraddr       => RSP2RDP_wraddr,
       RSP2RDP_data         => RSP2RDP_data,
       RSP2RDP_we           => RSP2RDP_we,  
       RSP2RDP_done         => RSP2RDP_done, 
@@ -593,6 +593,7 @@ begin
       error_combineAlpha   => errorRDP_combineAlpha,
       error_texMode        => errorRDP_texMode,
       error_drawMode       => errorRDP_drawMode,
+      error_RDPMEMMUX      => error_RDPMEMMUX,
       
       DISABLEFILTER        => DISABLEFILTER,
       DISABLEDITHER        => DISABLEDITHER,
@@ -666,7 +667,6 @@ begin
       RSP2RDP_rdaddr       => RSP2RDP_rdaddr, 
       RSP2RDP_len          => RSP2RDP_len,    
       RSP2RDP_req          => RSP2RDP_req,    
-      RSP2RDP_wraddr       => RSP2RDP_wraddr,
       RSP2RDP_data         => RSP2RDP_data,
       RSP2RDP_we           => RSP2RDP_we,  
       RSP2RDP_done         => RSP2RDP_done, 
