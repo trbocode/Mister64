@@ -14,17 +14,17 @@ end entity;
 
 architecture arch of etb is
 
-   constant clk_speed : integer := 62500000;
-   constant baud      : integer := 10000000;
- 
-   signal clk1x       : std_logic := '1';
-   signal clk93       : std_logic := '1';
-   signal clk2x       : std_logic := '1';
-   signal clkvid      : std_logic := '1';
+   constant clk_speed         : integer := 62500000;
+   constant baud              : integer := 10000000;
+         
+   signal clk1x               : std_logic := '1';
+   signal clk93               : std_logic := '1';
+   signal clk2x               : std_logic := '1';
+   signal clkvid              : std_logic := '1';
    
-   signal clk1xToggle            : std_logic := '0';
-   signal clk1xToggle2X          : std_logic := '0';
-   signal clk2xIndex             : std_logic := '0';
+   signal clk1xToggle         : std_logic := '0';
+   signal clk1xToggle2X       : std_logic := '0';
+   signal clk2xIndex          : std_logic := '0';
    
    -- top level replication
    signal rdram_request       : tDDDR3Single;
@@ -74,6 +74,7 @@ architecture arch of etb is
    signal sdram_rnw           : std_logic;
    signal sdram_ena           : std_logic;
    signal sdram_done          : std_logic;     
+   signal sdram_reqprocessed  : std_logic;     
    
    -- video
    signal video_hblank        : std_logic;
@@ -149,11 +150,16 @@ begin
       ISPAL                => '0',
       CROPBOTTOM           => "00",
       VI_BILINEAROFF       => '0',
+      VI_GAMMAOFF          => '0',
+      VI_NOISEOFF          => '1',
+      VI_DEDITHEROFF       => '0',
+      VI_AAOFF             => '0',
+      VI_DIVOTOFF          => '0',
       
       irq_out              => open,
       
       errorEna             => '0',
-      errorCode            => 24x"0",
+      errorCode            => 28x"0",
       fpscountOn           => '0',
       
       rdram_request        => rdram_request(DDR3MUX_VI),   
@@ -164,6 +170,15 @@ begin
       rdram_done           => rdram_done(DDR3MUX_VI),
       ddr3_DOUT            => DDRAM_DOUT,       
       ddr3_DOUT_READY      => DDRAM_DOUT_READY,       
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_VI),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_VI),       
+      sdram_address        => sdramMux_address(SDRAMMUX_VI),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_VI),
+      sdram_granted        => sdramMux_granted(SDRAMMUX_VI),      
+      sdram_done           => sdramMux_done(SDRAMMUX_VI),      
+      sdram_dataRead       => sdram_dataRead,
+      sdram_valid          => (sdram_done and sdram_rnw), 
       
       video_hsync          => open, 
       video_vsync          => open,  
@@ -280,6 +295,7 @@ begin
       sdram_Adr            => sdram_Adr,      
       sdram_be             => sdram_be,       
       sdram_dataWrite      => sdram_dataWrite,
+      sdram_reqprocessed   => sdram_reqprocessed,     
       sdram_done           => sdram_done,     
       sdram_dataRead       => sdram_dataRead, 
                            
@@ -294,7 +310,7 @@ begin
       sdramMux_dataRead    => sdramMux_dataRead,
       
       rdp9fifo_reset       => '0',
-      rdp9fifo_Din         => 50x"0",
+      rdp9fifo_Din         => 54x"0",
       rdp9fifo_Wr          => '0',
       rdp9fifo_nearfull    => open,
       rdp9fifo_empty       => open,
@@ -307,15 +323,21 @@ begin
    );
    
    sdramMux_request(0 to 2) <= "000";
-   sdramMux_request(4) <= '0';
+   
+   sdramMux_request(SDRAMMUX_RDP)    <= '0';
+   sdramMux_address(SDRAMMUX_RDP)    <= (others => '0');
+   sdramMux_rnw(SDRAMMUX_RDP)        <= '1';
+   sdramMux_burstcount(SDRAMMUX_RDP) <= x"59";
    
    isdram_model : entity work.sdram_model
    generic map
    (
+      LOADRDRAM         => '1',
       DOREFRESH         => '0',
       INITFILE          => "NONE",
-      SCRIPTLOADING     => '1',
-      FILELOADING       => '0'
+      SCRIPTLOADING     => '0',
+      FILELOADING       => '0',
+      READDELAY         => 6
    )
    port map
    (
@@ -326,6 +348,7 @@ begin
       be                => sdram_be,
       di                => sdram_dataWrite,
       do                => sdram_dataRead,
+      reqprocessed      => sdram_reqprocessed,
       done              => sdram_done,
       fileSize          => open
    );
@@ -361,24 +384,24 @@ begin
       SS_wren           => SS_wren     
    );
    
-   process -- simulate interlaced register changes 
-   begin
-      wait until rising_edge(video_interlace);
-      bus_VI_addr      <= x"00004";
-      bus_VI_dataWrite <= x"001767c0";
-      bus_VI_write     <= '1';
-      wait until rising_edge(clk1x);
-      bus_VI_write     <= '0';
-      wait until rising_edge(clk1x);
-      
-      wait until falling_edge(video_interlace);
-      bus_VI_addr      <= x"00004";
-      bus_VI_dataWrite <= x"0020ccc0";
-      bus_VI_write     <= '1';
-      wait until rising_edge(clk1x);
-      bus_VI_write     <= '0';
-      wait until rising_edge(clk1x);
-   end process;  
+   --process -- simulate interlaced register changes 
+   --begin
+   --   wait until rising_edge(video_interlace);
+   --   bus_VI_addr      <= x"00004";
+   --   bus_VI_dataWrite <= x"001767c0";
+   --   bus_VI_write     <= '1';
+   --   wait until rising_edge(clk1x);
+   --   bus_VI_write     <= '0';
+   --   wait until rising_edge(clk1x);
+   --   
+   --   wait until falling_edge(video_interlace);
+   --   bus_VI_addr      <= x"00004";
+   --   bus_VI_dataWrite <= x"0020ccc0";
+   --   bus_VI_write     <= '1';
+   --   wait until rising_edge(clk1x);
+   --   bus_VI_write     <= '0';
+   --   wait until rising_edge(clk1x);
+   --end process;  
       
    
 end architecture;

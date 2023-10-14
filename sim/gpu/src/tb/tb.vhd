@@ -60,7 +60,7 @@ architecture arch of etb is
    signal sdramMux_dataRead   : std_logic_vector(31 downto 0);
    
    signal rdp9fifo_reset      : std_logic; 
-   signal rdp9fifo_Din        : std_logic_vector(49 downto 0);
+   signal rdp9fifo_Din        : std_logic_vector(53 downto 0);
    signal rdp9fifo_Wr         : std_logic;  
    signal rdp9fifo_nearfull   : std_logic;  
    signal rdp9fifo_empty      : std_logic;   
@@ -111,7 +111,6 @@ architecture arch of etb is
    signal RSP2RDP_rdaddr      : unsigned(11 downto 0) := (others => '0'); 
    signal RSP2RDP_len         : unsigned(4 downto 0) := (others => '0'); 
    signal RSP2RDP_req         : std_logic := '0';
-   signal RSP2RDP_wraddr      : unsigned(4 downto 0) := (others => '0');
    signal RSP2RDP_data        : std_logic_vector(63 downto 0) := (others => '0');
    signal RSP2RDP_we          : std_logic := '0';
    signal RSP2RDP_done        : std_logic := '0';
@@ -252,7 +251,6 @@ begin
       RSP2RDP_rdaddr       => RSP2RDP_rdaddr, 
       RSP2RDP_len          => RSP2RDP_len,    
       RSP2RDP_req          => RSP2RDP_req,    
-      RSP2RDP_wraddr       => RSP2RDP_wraddr,
       RSP2RDP_data         => RSP2RDP_data,
       RSP2RDP_we           => RSP2RDP_we,  
       RSP2RDP_done         => RSP2RDP_done,  
@@ -540,10 +538,8 @@ begin
       
       if (RSP2RDP_req = '1') then
    
-         RSP2RDP_wraddr <= (others => '0');
          for i in 0 to (to_integer(RSP2RDP_len) - 1) loop
          
-            RSP2RDP_wraddr <= to_unsigned(i, 5);
             RSP2RDP_data   <= commandarray(i);
             RSP2RDP_we     <= '1';
             wait until rising_edge(clk1x);

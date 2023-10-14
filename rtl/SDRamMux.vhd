@@ -62,7 +62,7 @@ entity SDRamMux is
       sdramMux_dataRead    : out std_logic_vector(31 downto 0);
       
       rdp9fifo_reset       : in  std_logic; 
-      rdp9fifo_Din         : in  std_logic_vector(49 downto 0); -- 32bit data + 18 bit address
+      rdp9fifo_Din         : in  std_logic_vector(53 downto 0); -- 32bit data + 18 bit address + 4bit byte enable
       rdp9fifo_Wr          : in  std_logic;  
       rdp9fifo_nearfull    : out std_logic;  
       rdp9fifo_empty       : out std_logic;        
@@ -93,7 +93,7 @@ architecture arch of SDRamMux is
    signal remain        : unsigned(7 downto 0);
 
    -- rdp fifo
-   signal rdpfifo_Dout     : std_logic_vector(49 downto 0);
+   signal rdpfifo_Dout     : std_logic_vector(53 downto 0);
    signal rdpfifo_Rd       : std_logic := '0';    
    
    -- rdp fifo Z Buffer
@@ -177,7 +177,7 @@ begin
                   sdram_ena         <= '1';
                   sdram_rnw         <= '0';
                   sdram_dataWrite   <= rdpfifo_Dout(31 downto 0);      
-                  sdram_be          <= x"F";       
+                  sdram_be          <= rdpfifo_Dout(53 downto 50);       
                   sdram_Adr         <= 7x"0" & rdpfifo_Dout(49 downto 32) & "00";               
                   
                elsif (rdp9fifoZ_empty = '0') then
@@ -229,7 +229,7 @@ begin
    generic map
    (
       SIZE             => 128,
-      DATAWIDTH        => 32 + 18, -- 32bit data + 18 bit address
+      DATAWIDTH        => 32 + 18 + 4 , -- 32bit data + 18 bit address + 4bit byte enable
       NEARFULLDISTANCE => 64
    )
    port map

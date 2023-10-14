@@ -244,7 +244,7 @@ architecture arch of n64top is
    signal sdramMux_dataRead      : std_logic_vector(31 downto 0);
    
    signal rdp9fifo_reset         : std_logic; 
-   signal rdp9fifo_Din           : std_logic_vector(49 downto 0);
+   signal rdp9fifo_Din           : std_logic_vector(53 downto 0);
    signal rdp9fifo_Wr            : std_logic;  
    signal rdp9fifo_nearfull      : std_logic;  
    signal rdp9fifo_empty         : std_logic;

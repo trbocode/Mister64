@@ -58,6 +58,9 @@ architecture arch of vi_videoout_sync is
    signal clkDiv           : integer range 5 to 12 := 5; 
    signal clkCnt           : integer range 0 to 12 := 0;
    signal xmax             : integer range 0 to 1023;
+
+   signal vsync_adj_pal     : integer range 0 to 128;
+   signal vsync_adj_ntsc    : integer range 0 to 128;
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
@@ -81,7 +84,20 @@ begin
          lineInNew <= '0';
              
          videoout_reports.vsync    <= '0';
-         if (vsyncCount >= 10 and vsyncCount < 13) then videoout_reports.vsync <= '1'; end if;
+
+         if (to_integer(videoout_settings.videoSizeY(9 downto 1)) = 0) then
+            vsync_adj_pal <= 10;
+            vsync_adj_ntsc <= 10;
+         else
+            vsync_adj_pal <= (312 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 2 - (312 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 16 - (312 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 32;
+            vsync_adj_ntsc <= (262 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 2 - (262 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 16 - (262 - to_integer(videoout_settings.videoSizeY(9 downto 1))) / 32;
+         end if;
+         
+         if (videoout_settings.isPAL = '1') then
+            if (vsyncCount >= vsync_adj_pal and vsyncCount < (vsync_adj_pal + 3)) then videoout_reports.vsync <= '1'; end if;
+         else
+            if (vsyncCount >= vsync_adj_ntsc and vsyncCount < (vsync_adj_ntsc + 3)) then videoout_reports.vsync <= '1'; end if;
+         end if;
 
          if (reset = '1') then
                
@@ -118,8 +134,8 @@ begin
             --if (videoout_settings.vDisplayRange(19 downto 10) < 314) then vDisplayEnd   <= to_integer(videoout_settings.vDisplayRange(19 downto 10)); else vDisplayEnd   <= 314; end if;
               
             vDisplayStart <= 10;
-            if ((10 + to_integer(videoout_settings.videoSizeY(9 downto 1))) < 210) then
-               vDisplayEnd <= 210;
+            if ((10 + to_integer(videoout_settings.videoSizeY(9 downto 1))) = 10) then
+               vDisplayEnd <= 247;
             else
                vDisplayEnd <= 10 + to_integer(videoout_settings.videoSizeY(9 downto 1));
             end if;
@@ -246,8 +262,8 @@ begin
                else
                   videoout_out.hblank <= '1';
                   if (videoout_out.hblank = '0') then
-                     hsync_start <= (nextHCount / 2) + (nextHCount / 4) + (nextHCount / 32);
-                     hsync_end   <= (nextHCount / 2);
+                     hsync_start <= (nextHCount / 2) + (nextHCount / 4) + (nextHCount / 16);
+                     hsync_end   <= (nextHCount / 2) + (nextHCount / 32);
                   end if;
                end if;
             end if;

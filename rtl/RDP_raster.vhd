@@ -676,7 +676,7 @@ begin
                         lineInfo.xStart              <= minxmx_new;
                         lineInfo.xEnd                <= maxxmx_new;
                         lineInfo.unscrx              <= unscrx_new;
-                        if (settings_otherModes.cycleType(1) = '0' and loading_mode = '0') then
+                        if (loading_mode = '0') then
                            polystate <= REQUESTFB;
                         else
                            startLine <= '1';

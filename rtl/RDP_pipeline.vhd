@@ -102,6 +102,7 @@ entity RDP_pipeline is
       export_FBMem            : out rdp_export_type := (others => (others => '0'));
       export_Z                : out rdp_export_type := (others => (others => '0'));
       
+      export_copy             : out std_logic := '0';     
       export_copyFetch        : out rdp_export_type := (others => (others => '0'));
       export_copyBytes        : out rdp_export_type := (others => (others => '0'));
       -- synthesis translate_on
@@ -119,10 +120,11 @@ entity RDP_pipeline is
       writePixelDataZ         : out unsigned(17 downto 0) := (others => '0');
       writePixelFBData9Z      : out unsigned(31 downto 0) := (others => '0');
       
-      copyPixel               : out std_logic := '0';
-      copyAddr                : out unsigned(25 downto 0) := (others => '0');
-      copyData                : out unsigned(63 downto 0) := (others => '0');
-      copyBE                  : out unsigned(7 downto 0) := (others => '0')
+      copyPixelOut            : out std_logic := '0';
+      copyAddrOut             : out unsigned(25 downto 0) := (others => '0');
+      copyDataOut             : out unsigned(63 downto 0) := (others => '0');
+      copyBEOut               : out unsigned(7 downto 0) := (others => '0');
+      copyPixelFBData9Out     : out unsigned(31 downto 0) := (others => '0')
    );
 end entity;
 
@@ -284,6 +286,21 @@ architecture arch of RDP_pipeline is
    
    signal writePixelColor     : tcolor3_u8 := (others => (others => '0'));
 
+   -- copy mode
+   signal copyAddr                  : unsigned(25 downto 0);
+   signal copyData                  : unsigned(63 downto 0);
+   signal copyBE                    : unsigned(7 downto 0);
+   
+   signal copyBEShifted             : unsigned(7 downto 0);
+   signal copyBEShiftedNext         : unsigned(7 downto 0);
+   signal copyDataShifted           : unsigned(63 downto 0);
+   signal copyDataShiftedNext       : unsigned(63 downto 0);
+
+   signal copyNext                  : std_logic := '0';
+   signal copyBESaved               : unsigned(7 downto 0) := (others => '0');
+   signal copyAddrSaved             : unsigned(19 downto 0) := (others => '0');
+   signal copyDataSaved             : unsigned(63 downto 0) := (others => '0');
+
    -- export only
    -- synthesis translate_off
    signal stage_cvg16         : t_stage_u16;
@@ -374,17 +391,53 @@ begin
       
    end process;
    
+   -- copy mode -- todo: non 16 bit mode
+   copyAddr  <= stage_addr(STAGE_PALETTE);
+   
+   copyData(15 downto  0) <= byteswap16(texture_copy(63 downto 48));
+   copyData(31 downto 16) <= byteswap16(texture_copy(47 downto 32));
+   copyData(47 downto 32) <= byteswap16(texture_copy(31 downto 16));
+   copyData(63 downto 48) <= byteswap16(texture_copy(15 downto  0));
+   
+   process (all)
+   begin
+      copyBE <= (others => '1');
+      if (stage_copySize(STAGE_PALETTE) <= 7) then copyBE(7) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 6) then copyBE(6) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 5) then copyBE(5) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 4) then copyBE(4) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 3) then copyBE(3) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 2) then copyBE(2) <= '0'; end if;
+      if (stage_copySize(STAGE_PALETTE) <= 1) then copyBE(1) <= '0'; end if;
+      if (texture_copy(48) = '0') then copyBE(1 downto 0) <= "00"; end if;
+      if (texture_copy(32) = '0') then copyBE(3 downto 2) <= "00"; end if;
+      if (texture_copy(16) = '0') then copyBE(5 downto 4) <= "00"; end if;
+      if (texture_copy( 0) = '0') then copyBE(7 downto 6) <= "00"; end if;
+   end process;
+   
+   copyBEShifted     <= copyBE sll to_integer(copyAddr(2 downto 0));
+   copyBEShiftedNext <= shift_right(copyBE, 8 - to_integer(copyAddr(2 downto 0)));
+   
+   copyDataShifted   <= copyData                       when copyAddr(2 downto 0) = "000" else
+                        copyData(47 downto 0) & 16x"0" when copyAddr(2 downto 0) = "010" else
+                        copyData(31 downto 0) & 32x"0" when copyAddr(2 downto 0) = "100" else
+                        copyData(15 downto 0) & 48x"0";
+                        
+   copyDataShiftedNext <= 48x"0" & copyData(63 downto 48) when copyAddr(2 downto 0) = "010" else
+                          32x"0" & copyData(63 downto 32) when copyAddr(2 downto 0) = "100" else
+                          16x"0" & copyData(63 downto 16);   
+      
    process (clk1x)
       variable cvgCounter : unsigned(3 downto 0);
    begin
       if rising_edge(clk1x) then
       
-         writePixel  <= '0';
-         writePixelZ <= '0';
-         
-         copyPixel   <= '0';
-         
-         step2       <= '0';
+         writePixel   <= '0';
+         writePixelZ  <= '0';
+                      
+         copyPixelOut <= '0';
+                      
+         step2        <= '0';
          
          if (pipeIn_trigger = '1') then
             settings_tile0_1 <= settings_tile;
@@ -395,6 +448,7 @@ begin
          
          -- synthesis translate_off
          export_pipeDone <= '0';
+         export_copy     <= '0';
          -- synthesis translate_on
          
          dzPixEnc <= (others => '0');
@@ -635,26 +689,29 @@ begin
             stage_ditherA(STAGE_COMBINER)  <= ditherAlpha;      
 
             -- todo: non 16 bit mode
-            copyPixel <= stage_valid(STAGE_PALETTE) and settings_otherModes.cycleType(1);
-            copyAddr  <= stage_addr(STAGE_PALETTE);
+            copyPixelOut         <= stage_valid(STAGE_PALETTE) and settings_otherModes.cycleType(1);
+            copyAddrOut          <= copyAddr;
+            copyDataOut          <= copyDataShifted or copyDataSaved;
+            copyBEOut            <= copyBEShifted or copyBESaved;
+            copyPixelFBData9Out  <= stage_FBData9(STAGE_PALETTE);
             
-            copyData(15 downto  0) <= byteswap16(texture_copy(63 downto 48));
-            copyData(31 downto 16) <= byteswap16(texture_copy(47 downto 32));
-            copyData(47 downto 32) <= byteswap16(texture_copy(31 downto 16));
-            copyData(63 downto 48) <= byteswap16(texture_copy(15 downto  0));
+            copyNext      <= '0';
+            copyBESaved   <= (others => '0');
+            copyDataSaved <= (others => '0');
             
-            copyBE <= (others => '1');
-            if (stage_copySize(STAGE_PALETTE) <= 7) then copyBE(7) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 6) then copyBE(6) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 5) then copyBE(5) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 4) then copyBE(4) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 3) then copyBE(3) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 2) then copyBE(2) <= '0'; end if;
-            if (stage_copySize(STAGE_PALETTE) <= 1) then copyBE(1) <= '0'; end if;
-            if (texture_copy(48) = '0') then copyBE(1 downto 0) <= "00"; end if;
-            if (texture_copy(32) = '0') then copyBE(3 downto 2) <= "00"; end if;
-            if (texture_copy(16) = '0') then copyBE(5 downto 4) <= "00"; end if;
-            if (texture_copy( 0) = '0') then copyBE(7 downto 6) <= "00"; end if;
+            if (stage_valid(STAGE_PALETTE) = '1' and settings_otherModes.cycleType(1) = '1') then
+               copyPixelOut <= '1';
+               if (copyAddr(2 downto 0) /= 0 and copyBEShiftedNext /= 0) then
+                  copyNext       <= '1';
+                  copyBESaved    <= copyBEShiftedNext; 
+                  copyDataSaved  <= copyDataShiftedNext;  
+               end if;
+            elsif (copyNext = '1') then -- todo: concept need to be adjusted if games do unaligned backwards copy
+               copyPixelOut <= '1';
+               copyAddrOut  <= copyAddrOut + 8;
+               copyDataOut  <= copyDataSaved;
+               copyBEOut    <= copyBESaved;  
+            end if;
             
             -- synthesis translate_off
             stage_cvg16(STAGE_COMBINER)        <= stage_cvg16(STAGE_PALETTE);
@@ -683,6 +740,10 @@ begin
             stage2_texFt_db3(STAGE_COMBINER)   <= export2_TexFt_db3; 
             stage2_texFt_mode(STAGE_COMBINER)  <= export2_TexFt_mode; 
             
+            if (stage_valid(STAGE_PALETTE) = '1' and settings_otherModes.cycleType(1) = '1') then
+               export_copy <= '1';
+            end if;
+            
             export_copyFetch.addr    <= 6x"0" & stage_addr(STAGE_PALETTE);
             export_copyFetch.data    <= texture_copy;
             export_copyFetch.x       <= resize(stage_x(STAGE_PALETTE), 16);
@@ -691,13 +752,16 @@ begin
             export_copyFetch.debug2  <= 16x"0" & unsigned(stage_STWZ(STAGE_PALETTE)(1)(31 downto 16));
             export_copyFetch.debug3  <= 16x"0" & unsigned(stage_STWZ(STAGE_PALETTE)(2)(31 downto 16)); 
             
-            export_copyBytes.addr    <= 6x"0" & stage_addr(STAGE_PALETTE);
-            export_copyBytes.data    <= texture_copy;
-            export_copyBytes.x       <= (others => '0');
-            export_copyBytes.y       <= (others => '0');
-            export_copyBytes.debug1  <= (others => '0');
-            export_copyBytes.debug2  <= 28x"0" & stage_copySize(STAGE_PALETTE);
-            export_copyBytes.debug3  <= 31x"0" & settings_poly.lft;
+            export_copyBytes.addr               <= 6x"0" & stage_addr(STAGE_PALETTE);
+            export_copyBytes.data(15 downto  0) <= byteswap16(texture_copy(63 downto 48));
+            export_copyBytes.data(31 downto 16) <= byteswap16(texture_copy(47 downto 32));
+            export_copyBytes.data(47 downto 32) <= byteswap16(texture_copy(31 downto 16));
+            export_copyBytes.data(63 downto 48) <= byteswap16(texture_copy(15 downto  0));
+            export_copyBytes.x                  <= (others => '0');
+            export_copyBytes.y                  <= (others => '0');
+            export_copyBytes.debug1             <= 24x"0" & copyBE;
+            export_copyBytes.debug2             <= 28x"0" & stage_copySize(STAGE_PALETTE);
+            export_copyBytes.debug3             <= 31x"0" & settings_poly.lft;
             -- synthesis translate_on         
 
             -- ##################################################
@@ -981,8 +1045,13 @@ begin
                
             export_Comb.addr        <= resize(stage_combineC(STAGE_OUTPUT - 1)(3), 32);
             export_Comb.data        <= (others => '0');
-            export_Comb.x           <= 13x"0" & stage_ditherC(STAGE_OUTPUT - 1);
-            export_Comb.y           <= 13x"0" & stage_ditherA(STAGE_OUTPUT - 1);
+            if (settings_otherModes.cycleType = "00") then
+               export_Comb.x        <= 13x"0" & stage_ditherC(STAGE_OUTPUT - 1);
+               export_Comb.y        <= 13x"0" & stage_ditherA(STAGE_OUTPUT - 1);
+            else
+               export_Comb.x        <= (others => '0');
+               export_Comb.y        <= (others => '0');
+            end if;
             export_Comb.debug1      <= resize(stage_combineC(STAGE_OUTPUT - 1)(0), 32);
             export_Comb.debug2      <= resize(stage_combineC(STAGE_OUTPUT - 1)(1), 32);
             export_Comb.debug3      <= resize(stage_combineC(STAGE_OUTPUT - 1)(2), 32);            

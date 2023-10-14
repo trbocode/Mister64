@@ -74,7 +74,7 @@ entity RDP is
       sdram_valid          : in  std_logic;
       
       rdp9fifo_reset       : out std_logic := '0'; 
-      rdp9fifo_Din         : out std_logic_vector(49 downto 0) := (others => '0'); -- 32bit data + 18 bit address
+      rdp9fifo_Din         : out std_logic_vector(53 downto 0) := (others => '0'); -- 32bit data + 18 bit address + 4bit byte enable
       rdp9fifo_Wr          : out std_logic := '0';  
       rdp9fifo_nearfull    : in  std_logic;  
       rdp9fifo_empty       : in  std_logic;
@@ -316,16 +316,8 @@ architecture arch of RDP is
    signal copyAddr                  : unsigned(25 downto 0);
    signal copyData                  : unsigned(63 downto 0);
    signal copyBE                    : unsigned(7 downto 0);
-   
-   signal copyBEShifted             : unsigned(7 downto 0);
-   signal copyBEShiftedNext         : unsigned(7 downto 0);
-   signal copyDataShifted           : unsigned(63 downto 0);
-   signal copyDataShiftedNext       : unsigned(63 downto 0);
-
-   signal copyNext                  : std_logic := '0';
-   signal copyBESaved               : unsigned(7 downto 0) := (others => '0');
-   signal copyAddrSaved             : unsigned(19 downto 0) := (others => '0');
-   signal copyDataSaved             : unsigned(63 downto 0) := (others => '0');
+   signal copyPixelFBData9          : unsigned(31 downto 0);
+   signal copyPixelData9            : unsigned(31 downto 0);
 
    -- Pixel merging
    signal pixel64data               : std_logic_vector(63 downto 0) := (others => '0');
@@ -342,6 +334,7 @@ architecture arch of RDP is
    -- FB Bit 9 writing
    signal pixel9data                : std_logic_vector(31 downto 0) := (others => '0');
    signal pixel9addr                : std_logic_vector(17 downto 0) := (others => '0');
+   signal pixel9BE                  : std_logic_vector(3 downto 0) := (others => '0');
    signal pixel9filled              : std_logic := '0';
    
    -- Z Buffer Bit 9 
@@ -396,6 +389,7 @@ architecture arch of RDP is
    signal export_Comb               : rdp_export_type;
    signal export_FBMem              : rdp_export_type;
    signal export_Z                  : rdp_export_type;
+   signal export_copy               : std_logic;
    signal export_copyFetch          : rdp_export_type;
    signal export_copyBytes          : rdp_export_type;
    
@@ -629,7 +623,7 @@ begin
                   sdram_finished    <= (not wait9) or (not read9); --'0';
                   sdramZ_finished   <= (not wait9) or (not read9); --'0';
                   
-                  if (settings_otherModes.imageRead = '1') then
+                  if (settings_otherModes.imageRead = '1' and settings_otherModes.cycleType /= "10") then
                      rdram_request     <= '1';
                      rdram_address     <= "00" & FB_req_addr(25 downto 3) & "000";
                      rdram_finished    <= '0';
@@ -637,13 +631,13 @@ begin
                   else
                      rdram_finished    <= '1';
                      FBRAMgrant        <= '1';
-                     if (settings_otherModes.zCompare = '1') then
+                     if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
                         rdram_request  <= '1';
                         rdram_address  <= "00" & FB_reqZ_addr(25 downto 3) & "000";
                      end if;
                   end if;
 
-                  if (settings_otherModes.zCompare = '1') then
+                  if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
                      rdramZ_finished   <= '0';
                      FBRAMZgrant       <= '0';
                   else
@@ -713,7 +707,7 @@ begin
                
                if (rdram_done = '1' and FBRAMgrant = '1' and rdram_finished = '0') then 
                   rdram_finished_new := '1'; 
-                  if (settings_otherModes.zCompare = '1' and readZ = '1') then
+                  if (settings_otherModes.zCompare = '1' and readZ = '1' and settings_otherModes.cycleType /= "10") then
                      rdram_request <= '1';
                      rdram_address <= "00" & FB_reqZ_addr(25 downto 3) & "000";
                   else
@@ -724,7 +718,7 @@ begin
                
                if (sdram_done = '1' and FBRAM9store = '1') then 
                   sdram_finished_new := '1'; 
-                  if ((settings_otherModes.zCompare = '1' or settings_otherModes.zUpdate = '1') and read9 = '1') then
+                  if ((settings_otherModes.zCompare = '1' or settings_otherModes.zUpdate = '1') and read9 = '1' and settings_otherModes.cycleType /= "10") then
                      sdram_request     <= '1';
                      sdram_address     <= 7x"0" & FB_reqZ_addr(22 downto 5) & "00";
                   else
@@ -1278,6 +1272,7 @@ begin
       export_Comb             => export_Comb,   
       export_FBMem            => export_FBMem,   
       export_Z                => export_Z,   
+      export_copy             => export_copy,   
       export_copyFetch        => export_copyFetch,   
       export_copyBytes        => export_copyBytes,   
       -- synthesis translate_on
@@ -1295,28 +1290,16 @@ begin
       writePixelDataZ         => writePixelDataZ,   
       writePixelFBData9Z      => writePixelFBData9Z,
       
-      copyPixel               => copyPixel,
-      copyAddr                => copyAddr,
-      copyData                => copyData,
-      copyBE                  => copyBE  
+      copyPixelOut            => copyPixel,
+      copyAddrOut             => copyAddr,
+      copyDataOut             => copyData,
+      copyBEOut               => copyBE,
+      copyPixelFBData9Out     => copyPixelFBData9
    );
    
    writePixelData8  <= writePixelColor(1) when (writePixelAddr(0) = '1') else writePixelColor(0);
    writePixelData16 <= writePixelColor(0)(7 downto 3) & writePixelColor(1)(7 downto 3) & writePixelColor(2)(7 downto 3) & writePixelCvg(2);
    writePixelData32 <= writePixelColor(0) & writePixelColor(1) & writePixelColor(2) & writePixelCvg & "00000";
-   
-   
-   copyBEShifted     <= copyBE sll to_integer(copyAddr(2 downto 0));
-   copyBEShiftedNext <= shift_right(copyBE, 8 - to_integer(copyAddr(2 downto 0)));
-   
-   copyDataShifted   <= copyData                       when copyAddr(2 downto 0) = "000" else
-                        copyData(47 downto 0) & 16x"0" when copyAddr(2 downto 0) = "010" else
-                        copyData(31 downto 0) & 32x"0" when copyAddr(2 downto 0) = "100" else
-                        copyData(15 downto 0) & 48x"0";
-                        
-   copyDataShiftedNext <= 48x"0" & copyData(63 downto 48) when copyAddr(2 downto 0) = "010" else
-                          32x"0" & copyData(63 downto 32) when copyAddr(2 downto 0) = "100" else
-                          16x"0" & copyData(63 downto 16);
    
    -- normal pixels
    process (clk1x)
@@ -1325,15 +1308,8 @@ begin
       
          stall_raster <= fifoout_nearfull or rdp9fifo_nearfull or fifooutZ_nearfull or rdp9fifoZ_nearfull;
       
-         --fifoOut_Wr_1 <= fifoOut_Wr; -- fifoOut_Wr_1 used for idle test
-      
          fifoOut_Wr   <= '0';
          fifoOut_Din  <= pixel64BE & pixel64Addr & pixel64data;
-         
-         copyNext       <= '0';
-         copyBESaved    <= (others => '0'); 
-         copyAddrSaved  <= copyAddr(22 downto 3) + 1;  
-         copyDataSaved  <= (others => '0');  
          
          if (fillWrite = '1') then
          
@@ -1344,24 +1320,10 @@ begin
             
          elsif (copyPixel = '1') then
          
-            -- todo: concept need to be adjusted if games do unaligned backwards copy
             fifoOut_Wr   <= '1';
-            fifoOut_Din(91 downto 84) <= std_logic_vector(copyBEShifted) or std_logic_vector(copyBESaved);
+            fifoOut_Din(91 downto 84) <= std_logic_vector(copyBE);
             fifoOut_Din(83 downto 64) <= std_logic_vector(copyAddr(22 downto 3));
-            fifoOut_Din(63 downto  0) <= std_logic_vector(copyDataShifted) or std_logic_vector(copyDataSaved);  
-            
-            if (copyAddr(2 downto 0) /= 0 and copyBEShiftedNext /= 0) then
-               copyNext       <= '1';
-               copyBESaved    <= copyBEShiftedNext; 
-               copyDataSaved  <= copyDataShiftedNext;  
-            end if;
-            
-         elsif (copyNext = '1') then
-         
-            fifoOut_Wr   <= '1';
-            fifoOut_Din(91 downto 84) <= std_logic_vector(copyBESaved);
-            fifoOut_Din(83 downto 64) <= std_logic_vector(copyAddrSaved);
-            fifoOut_Din(63 downto  0) <= std_logic_vector(copyDataSaved);  
+            fifoOut_Din(63 downto  0) <= std_logic_vector(copyData);  
          
          elsif (writePixel = '1' and writePixelAddr(25 downto 23) = 0) then -- todo: move max ram check to ddr3mux
          
@@ -1446,12 +1408,33 @@ begin
    end process;
    
    -- bit 9 framebuffer
+   process (all)
+   begin
+      copyPixelData9 <= (others => '0');
+      if (copyBE(1) = '1' and copyData(8) = '1') then 
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 0) <= '1';
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 1) <= '1';
+      end if;
+      if (copyBE(3) = '1' and copyData(24) = '1') then 
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 2) <= '1';
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 3) <= '1';
+      end if;
+      if (copyBE(5) = '1' and copyData(40) = '1') then 
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 4) <= '1';
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 5) <= '1';
+      end if;
+      if (copyBE(7) = '1' and copyData(56) = '1') then 
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 6) <= '1';
+         copyPixelData9((to_integer(copyAddr(4 downto 3)) * 8) + 7) <= '1';
+      end if;
+   end process; 
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
       
          rdp9fifo_Wr   <= '0';
-         rdp9fifo_Din  <= pixel9Addr & pixel9data;
+         rdp9fifo_Din  <= pixel9BE & pixel9Addr & pixel9data;
          
          if (fillWrite = '1') then
          
@@ -1462,17 +1445,45 @@ begin
                pixel9Addr   <= std_logic_vector(fillAddr(22 downto 5));
                pixel9filled <= '1';
                pixel9data   <= (others => '0');
+               pixel9BE     <= (others => '0');
             end if;
             
             case (fillAddr(4 downto 3)) is
-               when "00" => pixel9data( 7 downto  0) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
-               when "01" => pixel9data(15 downto  8) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
-               when "10" => pixel9data(23 downto 16) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
-               when "11" => pixel9data(31 downto 24) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
+               when "00" => 
+                  pixel9BE(0)              <= '1';
+                  pixel9data( 7 downto  0) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
+                  
+               when "01" => 
+                  pixel9BE(1)              <= '1';
+                  pixel9data(15 downto  8) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
+                  
+               when "10" => 
+                  pixel9BE(2)              <= '1';
+                  pixel9data(23 downto 16) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
+                  
+               when "11" =>
+                  pixel9BE(3)              <= '1';
+                  pixel9data(31 downto 24) <= fillColor(56) & fillColor(56) & fillColor(40) & fillColor(40) & fillColor(24) & fillColor(24) & fillColor(8) & fillColor(8);
+                  
                when others => null;
             end case;
+            
+         elsif (copyPixel = '1' and copyAddr(25 downto 23) = 0) then
+         
+            pixel9BE <= x"F";
+         
+            if (pixel9filled = '0' or copyAddr(22 downto 5) /= unsigned(pixel9Addr)) then
+               pixel9data   <= std_logic_vector(copyPixelFBData9) or std_logic_vector(copyPixelData9); -- must fill in old data because only some bits are updated, byte enable not possible
+               rdp9fifo_Wr  <= pixel9filled and write9;
+               pixel9Addr   <= std_logic_vector(copyAddr(22 downto 5));
+               pixel9filled <= '1';
+            else
+               pixel9data   <= pixel9data or std_logic_vector(copyPixelData9);
+            end if;
          
          elsif (writePixel = '1' and writePixelAddr(25 downto 23) = 0) then
+         
+            pixel9BE <= x"F";
          
             if (pixel9filled = '0' or writePixelAddr(22 downto 5) /= unsigned(pixel9Addr)) then
                pixel9data   <= std_logic_vector(writePixelFBData9); -- must fill in old data because only 2 bits are updated, byte enable not possible
@@ -1778,12 +1789,12 @@ begin
                tracecounts_out(1) <= tracecounts_out(1) + 1;
             end if;
             
-            if (copyPixel = '1') then
+            if (export_copy = '1') then
                export_gpu64(14, tracecounts_out(14), export_copyFetch, outfile); tracecounts_out(14) <= tracecounts_out(14) + 1;
                
                export_copyIndex := tracecounts_out(15);
-               export_copyAddr  := 6x"0" & copyAddr;
-               export_copyData  := copyData;
+               export_copyAddr  := export_copyBytes.addr;
+               export_copyData  := export_copyBytes.data;
                for i in 0 to to_integer(export_copyBytes.debug2(3 downto 0) - 1) loop
                   write(line_out, string'("CopyByte: I ")); 
                   write(line_out, to_string_len(export_copyIndex + 1, 8));
@@ -1792,7 +1803,7 @@ begin
                   write(line_out, string'(" D ")); 
                   write(line_out, to_hstring(24x"0" & export_copyData(7 downto 0)));
                   write(line_out, string'(" X     ")); 
-                  if (copyBE(i) = '1') then
+                  if (export_copyBytes.debug1(i) = '1') then
                      write(line_out, string'("1")); 
                   else
                      write(line_out, string'("0"));
@@ -1909,6 +1920,90 @@ begin
       end process;
    
    end generate goutput;
+   
+   goutput_fb : if 1 = 1 generate
+   begin
+   
+      process
+      
+         file outfile: text;
+         variable f_status: FILE_OPEN_STATUS;
+         variable line_out : line;
+         variable addr     : unsigned(25 downto 0);
+         variable be       : unsigned(7 downto 0);
+         variable data     : unsigned(63 downto 0);
+         
+         variable calcaddr : integer;
+         variable linesize : integer;
+         variable xpos     : integer;
+         variable ypos     : integer;
+         variable color    : unsigned(31 downto 0) := (others => '0');
+         
+      begin
+   
+         file_open(f_status, outfile, "gra_fb_out_fb.gra", write_mode);
+         file_close(outfile);
+         
+         file_open(f_status, outfile, "gra_fb_out_fb.gra", append_mode);
+         write(line_out, string'("640#480#2")); 
+         writeline(outfile, line_out);
+         
+         while (true) loop
+            wait until rising_edge(clk1x);
+            if (fifoout_Wr = '1') then
+            
+               if (settings_colorImage.FB_size = SIZE_8BIT) then
+               
+                  null;
+               
+               elsif (settings_colorImage.FB_size = SIZE_16BIT) then
+                  
+                  be   := unsigned(fifoout_Din(91 downto 84));
+                  addr := "000" & unsigned(fifoout_Din(83 downto 64)) & "000";
+                  data := unsigned(fifoout_Din(63 downto 0));
+                  
+                  -- resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
+                  linesize := (to_integer(settings_colorImage.FB_width_m1) + 1) * 2;                
+                  calcaddr := to_integer(addr) - to_integer(settings_colorImage.FB_base);
+                  ypos     := calcaddr / linesize;
+                  xpos     := (calcaddr - (ypos * linesize)) / 2;
+                  
+                  for i in 0 to 3 loop
+                     if (be(1 downto 0) = "11") then
+                        data(15 downto 0) := byteswap16(data(15 downto 0));                  
+                        color(23 downto 16) := data(15 downto 11) & "000";
+                        color(15 downto  8) := data(10 downto  6) & "000";
+                        color( 7 downto  0) := data( 5 downto  1) & "000";
+                        write(line_out, to_integer(color));
+                        write(line_out, string'("#"));
+                        write(line_out, xpos);
+                        write(line_out, string'("#")); 
+                        write(line_out, ypos);
+                        writeline(outfile, line_out);
+                     end if;
+                     xpos := xpos + 1;
+                     data := 16x"0" & data(63 downto 16);
+                     be := "00" & be(7 downto 2);
+                  end loop;
+   
+               elsif (settings_colorImage.FB_size = SIZE_32BIT) then     
+               
+                  null;
+                  
+               end if;
+               
+            end if;
+            
+            if (poly_done = '1') then
+               file_close(outfile);
+               file_open(f_status, outfile, "gra_fb_out_fb.gra", append_mode);
+            end if;
+             
+         end loop;
+         
+      end process;
+   
+   end generate goutput_fb;
 
    -- synthesis translate_on   
 
