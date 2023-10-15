@@ -20,6 +20,7 @@ entity savestates is
       RAMSIZE8                : in  std_logic;
          
       hps_busy                : in  std_logic;
+      sdrammux_idle           : in  std_logic;
       
       load_done               : out std_logic := '0';
             
@@ -526,7 +527,7 @@ begin
                end if;
                if (settle < 16) then
                   settle <= settle + 1;
-               elsif (reset_in = '0') then
+               elsif (reset_in = '0' and sdrammux_idle = '1') then
                   state          <= IDLE;
                   loading_ss     <= '0';
                   load_done      <= not resetMode;

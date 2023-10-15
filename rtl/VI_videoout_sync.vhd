@@ -58,9 +58,11 @@ architecture arch of vi_videoout_sync is
    signal clkDiv           : integer range 5 to 12 := 5; 
    signal clkCnt           : integer range 0 to 12 := 0;
    signal xmax             : integer range 0 to 1023;
+   signal xstart           : integer range 0 to 1023;
+   signal startBlank       : std_logic := '0';
 
-   signal vsync_adj_pal     : integer range 0 to 128;
-   signal vsync_adj_ntsc    : integer range 0 to 128;
+   signal vsync_adj_pal    : integer range 0 to 128;
+   signal vsync_adj_ntsc   : integer range 0 to 128;
       
    signal hsync_start      : integer range 0 to 4095;
    signal hsync_end        : integer range 0 to 4095;
@@ -222,6 +224,10 @@ begin
    clkDiv <= 5;
    xmax <= 640;
    
+   xstart <= (to_integer(videoout_settings.H_VIDEO_START) - 128) when (videoout_settings.isPAL = '1' and videoout_settings.H_VIDEO_START >= 128) else
+             (to_integer(videoout_settings.H_VIDEO_START) - 108) when (videoout_settings.isPAL = '0' and videoout_settings.H_VIDEO_START >= 108) else
+             0;
+   
    process (clk1x)
    begin
       if rising_edge(clk1x) then
@@ -250,7 +256,7 @@ begin
                      videoout_out.r      <= overlay_data( 7 downto 0);
                      videoout_out.g      <= overlay_data(15 downto 8);
                      videoout_out.b      <= overlay_data(23 downto 16);
-                  elsif (videoout_settings.CTRL_TYPE(1) = '0') then
+                  elsif (videoout_settings.CTRL_TYPE(1) = '0' or startBlank = '1') then
                      videoout_out.r      <= (others => '0');
                      videoout_out.g      <= (others => '0');
                      videoout_out.b      <= (others => '0');
@@ -278,10 +284,15 @@ begin
             if (nextHCount = hsync_end  ) then videoout_out.hsync <= '0'; end if;
          
             if (clkCnt >= (clkDiv - 1) and videoout_request.xpos < xmax) then
-               pixelData_B                <= videoout_pixelRead( 7 downto  0);
-               pixelData_G                <= videoout_pixelRead(15 downto  8);
-               pixelData_R                <= videoout_pixelRead(23 downto 16);
-               videoout_readAddr          <= videoout_readAddr + 1;
+               if (videoout_request.xpos >= xstart) then
+                  pixelData_B       <= videoout_pixelRead( 7 downto  0);
+                  pixelData_G       <= videoout_pixelRead(15 downto  8);
+                  pixelData_R       <= videoout_pixelRead(23 downto 16);
+                  videoout_readAddr <= videoout_readAddr + 1;
+                  startBlank        <= '0';
+               else
+                  startBlank        <= '1';
+               end if;
             end if;
          
          end if;

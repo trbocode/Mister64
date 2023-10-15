@@ -28,6 +28,11 @@ end package;
 --------------- SDRamMux module    -------------------------------
 -----------------------------------------------------------------
 
+-- 0..1  Mbyte = 9th bit of RDRAM
+-- 4..5  Mbyte = Saverams 
+-- 5..6  Mbyte = Controller Paks
+-- 8..72 Mbyte = ROM 
+
 library IEEE;
 use IEEE.std_logic_1164.all;  
 use IEEE.numeric_std.all; 
@@ -36,11 +41,18 @@ library mem;
 use work.pSDRAM.all;
 
 entity SDRamMux is
+   generic 
+   (
+      FASTSIM              : std_logic
+   );
    port 
    (
       clk1x                : in  std_logic;
+      ss_reset             : in  std_logic;
                            
       error                : out std_logic;
+      
+      isIdle               : out std_logic;
       
       sdram_ena            : out std_logic;
       sdram_rnw            : out std_logic;
@@ -82,15 +94,20 @@ architecture arch of SDRamMux is
       IDLE,
       WAITREAD,
       WAITWRITE,
-      WAITFIFOWRITE
+      WAITFIFOWRITE,
+      RESETBIT9,
+      WAITWRITERESET
    );
-   signal state         : tstate := IDLE;
-   
-   signal timeoutCount  : unsigned(12 downto 0);
-   
-   signal req_latched   : tSDRAMSingle := (others => '0');
-   signal lastIndex     : integer range 0 to SDRAMMUXCOUNT - 1;
-   signal remain        : unsigned(7 downto 0);
+   signal state            : tstate := IDLE;
+      
+   signal timeoutCount     : unsigned(12 downto 0);
+      
+   signal req_latched      : tSDRAMSingle := (others => '0');
+   signal lastIndex        : integer range 0 to SDRAMMUXCOUNT - 1;
+   signal remain           : unsigned(7 downto 0);
+
+   signal ss_reset_latched : std_logic := '0';
+   signal resetAddr9       : unsigned(17 downto 0) := (others => '0');
 
    -- rdp fifo
    signal rdpfifo_Dout     : std_logic_vector(53 downto 0);
@@ -101,6 +118,8 @@ architecture arch of SDRamMux is
    signal rdpfifoZ_Rd      : std_logic := '0'; 
 
 begin 
+
+   isIdle <= '1' when (state = IDLE) else '0';
 
    sdramMux_dataRead <= sdram_dataRead;
 
@@ -142,6 +161,10 @@ begin
             end if;
             
          end loop;
+         
+         if (ss_reset = '1') then
+            ss_reset_latched <= '1';
+         end if;
 
          -- main statemachine
          case (state) is
@@ -149,8 +172,15 @@ begin
                
                lastIndex    <= activeIndex;
                timeoutCount <= (others => '0');
+               
+               if (ss_reset_latched = '1') then
             
-               if (activeRequest = '1') then
+                  state            <= RESETBIT9;
+                  if (FASTSIM = '1') then
+                     resetAddr9 <= 18x"3F000";
+                  end if;
+            
+               elsif (activeRequest = '1') then
                
                   req_latched(activeIndex) <= '0';
                   sdram_dataWrite          <= sdramMux_dataWrite(activeIndex);
@@ -218,6 +248,24 @@ begin
                   timeoutCount <= (others => '0');
                   sdram_Adr    <= std_logic_vector(unsigned(sdram_Adr) + 4);
                   sdram_ena    <= '1';
+               end if;
+               
+            when RESETBIT9 =>
+               state             <= WAITWRITERESET;
+               sdram_ena         <= '1';
+               sdram_Adr         <= 7x"0" & std_logic_vector(resetAddr9) & "00";
+               sdram_rnw         <= '0';
+               sdram_dataWrite   <= (others => '1');
+               sdram_be          <= x"F";   
+               resetAddr9        <= resetAddr9 + 1;
+               
+            when WAITWRITERESET =>
+               if (sdram_done = '1') then
+                  state <= RESETBIT9;
+                  if (resetAddr9 = 0) then
+                     state            <= IDLE;
+                     ss_reset_latched <= '0';
+                  end if;
                end if;
 
          end case;

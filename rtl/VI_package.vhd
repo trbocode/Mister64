@@ -12,6 +12,7 @@ package pVI is
       isPAL           : std_logic;
       videoSizeY      : unsigned(9 downto 0);
       cropBottom      : unsigned(1 downto 0);
+      H_VIDEO_START   : unsigned(9 downto 0);
    end record;
    
    type tvideoout_reports is record

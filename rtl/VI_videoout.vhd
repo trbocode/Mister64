@@ -204,13 +204,14 @@ begin
    video_g              <= videoout_out.g;             
    video_b              <= videoout_out.b;  
 
-   videoout_settings.CTRL_TYPE      <= VI_CTRL_TYPE;
-   videoout_settings.CTRL_SERRATE   <= VI_CTRL_SERRATE;
-   videoout_settings.X_SCALE_FACTOR <= VI_X_SCALE_FACTOR;
-   videoout_settings.VI_WIDTH       <= VI_WIDTH;
-   videoout_settings.isPAL          <= ISPAL;
-   videoout_settings.videoSizeY     <= VI_V_VIDEO_END - VI_V_VIDEO_START - to_integer(videoout_settings.cropBottom & "0000");
-   videoout_settings.cropBottom     <= CROPBOTTOM;
+   videoout_settings.CTRL_TYPE         <= VI_CTRL_TYPE;
+   videoout_settings.CTRL_SERRATE      <= VI_CTRL_SERRATE;
+   videoout_settings.X_SCALE_FACTOR    <= VI_X_SCALE_FACTOR;
+   videoout_settings.VI_WIDTH          <= VI_WIDTH;
+   videoout_settings.isPAL             <= ISPAL;
+   videoout_settings.videoSizeY        <= VI_V_VIDEO_END - VI_V_VIDEO_START - to_integer(videoout_settings.cropBottom & "0000");
+   videoout_settings.cropBottom        <= CROPBOTTOM;
+   videoout_settings.H_VIDEO_START     <= VI_H_VIDEO_START;
    
    newLine    <= videoout_reports.newLine;
    VI_CURRENT <= videoout_reports.VI_CURRENT & '0'; -- todo: need to find when interlace sets bit 0, can't be instant, otherwise Kroms CPU tests would hang in infinite loop  

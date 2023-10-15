@@ -1019,8 +1019,8 @@ begin
                          '1' when (decOP = 16#39# or decOP = 16#3D#) else
                          '0';
    
-   decFPUForwardUse <= (decodeFPUCommandEnable or decodeFPUTransferEnable) when (decRequiresFPUreg1 = '1' and decodeFPUTarget = decFPUSource1) else
-                       (decodeFPUCommandEnable or decodeFPUTransferEnable) when (decRequiresFPUreg2 = '1' and decodeFPUTarget = decFPUSource2) else
+   decFPUForwardUse <= (decodeFPUCommandEnable or decodeFPUTransferEnable) when (decRequiresFPUreg1 = '1' and decodeFPUTarget(4 downto 1) = decFPUSource1(4 downto 1)) else
+                       (decodeFPUCommandEnable or decodeFPUTransferEnable) when (decRequiresFPUreg2 = '1' and decodeFPUTarget(4 downto 1) = decFPUSource2(4 downto 1)) else
                        '0';
 
    process (clk93)
@@ -1079,7 +1079,7 @@ begin
                   if (decSource1 > 0 and decodeTarget = decSource1) then decodeForwardValue1 <= '1'; end if;
                   if (decSource2 > 0 and decodeTarget = decSource2) then decodeForwardValue2 <= '1'; end if;
 
-                  -- FPU operand featching
+                  -- FPU operand fetching
                   decodeFPUValue1 <= unsigned(FPUregs1_q_b);
                   decodeFPUValue2 <= unsigned(FPUregs2_q_b);
                   decodeFPUTarget <= opcodeCacheMuxed(10 downto 6);

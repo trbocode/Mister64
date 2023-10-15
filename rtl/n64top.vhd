@@ -233,6 +233,7 @@ architecture arch of n64top is
    signal rdpfifoZ_empty         : std_logic;    
 
    -- SDRAM Mux
+   signal sdrammux_idle          : std_logic;
    signal sdramMux_request       : tSDRAMSingle;
    signal sdramMux_rnw           : tSDRAMSingle;    
    signal sdramMux_address       : tSDRAMReqAddr;
@@ -1143,11 +1144,18 @@ begin
    sdramMux_dataWrite(SDRAMMUX_VI) <= (others => '0');
    
    iSDRamMux : entity work.SDRamMux
+   generic map
+   (
+      FASTSIM => is_simu
+   )
    port map
    (
       clk1x                => clk1x,
+      ss_reset             => ss_reset,
                            
       error                => error_sdramMux,
+      
+      isIdle               => sdrammux_idle,
                            
       sdram_ena            => sdram_ena,      
       sdram_rnw            => sdram_rnw,      
@@ -1363,6 +1371,7 @@ begin
       RAMSIZE8                => RAMSIZE8,
       
       hps_busy                => '0',
+      sdrammux_idle           => sdrammux_idle,
            
       load_done               => state_loaded,
             

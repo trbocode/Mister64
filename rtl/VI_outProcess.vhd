@@ -148,7 +148,7 @@ begin
          end if;              
 
          H_GUARD_STOP <= VI_H_VIDEO_END;
-         if (VI_H_VIDEO_END <= GUARD_STOP) then
+         if (VI_H_VIDEO_END <= GUARD_STOP and VI_H_VIDEO_END >= 7) then
             H_GUARD_STOP <= VI_H_VIDEO_END - 7;
          end if;         
          
