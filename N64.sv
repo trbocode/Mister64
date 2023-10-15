@@ -249,6 +249,8 @@ parameter CONF_STR = {
    "O[55:54],Pad 3 Pak,None,CPAK,Rumble;",
    "O[57:56],Pad 4 Pak,None,CPAK,Rumble;",
    "O[60],Swap Analog<->DPAD,Off,On;",
+   "O[62:61],Dual Controller,Off,P1->P2,P1->P3;",
+   "O[63],Analog Stick Swap,Off,On;",
 	"-;",
    "O[30],Texture Filter,Original,Off;",
    "O[31],Dithering,Original,Off;",
@@ -326,8 +328,11 @@ wire [19:0] joy3;
 wire [19:0] joy4;
 
 wire [15:0] joystick_analog_l0;
+wire [15:0] joystick_analog_r0;
 wire [15:0] joystick_analog_l1;
+wire [15:0] joystick_analog_r1;
 wire [15:0] joystick_analog_l2;
+wire [15:0] joystick_analog_r2;
 wire [15:0] joystick_analog_l3;
 
 wire [10:0] ps2_key;
@@ -392,8 +397,11 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1)) hps_io
 	.info(info_index),
    
    .joystick_l_analog_0(joystick_analog_l0), 
+   .joystick_r_analog_0(joystick_analog_r0), 
    .joystick_l_analog_1(joystick_analog_l1),
+   .joystick_r_analog_1(joystick_analog_r1),
    .joystick_l_analog_2(joystick_analog_l2),
+   .joystick_r_analog_2(joystick_analog_r2),
    .joystick_l_analog_3(joystick_analog_l3),
    
    .joystick_0_rumble(rumble[0] ? 16'hFFFF : 16'h0000),
@@ -676,7 +684,7 @@ n64top
    .rumble           (rumble),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),
-   .pad_Z            ({joy4[ 9],joy3[ 9],joy2[ 9],joy[ 9]}),
+   .pad_Z            ({status[61]? joy3[11] : status[62]? joy2[11] : joy4[ 9],status[62]? joy[11] : joy3[ 9],status[61] ? joy[ 11] :joy2[ 9],joy[ 9]}),
    .pad_START        ({joy4[ 6],joy3[ 6],joy2[ 6],joy[ 6]}),
    .pad_DPAD_UP      ({joy4[ 3],joy3[ 3],joy2[ 3],joy[ 3]}),
    .pad_DPAD_DOWN    ({joy4[ 2],joy3[ 2],joy2[ 2],joy[ 2]}),
@@ -690,12 +698,12 @@ n64top
    .pad_C_RIGHT      ({joy4[11],joy3[11],joy2[11],joy[11]}),
    .pad_0_analog_h   (joystick_analog_l0[7:0]),
    .pad_0_analog_v   (joystick_analog_l0[15:8]),
-   .pad_1_analog_h   (joystick_analog_l1[7:0]),
-   .pad_1_analog_v   (joystick_analog_l1[15:8]),
-   .pad_2_analog_h   (joystick_analog_l2[7:0]),
-   .pad_2_analog_v   (joystick_analog_l2[15:8]),
-   .pad_3_analog_h   (joystick_analog_l3[7:0]),
-   .pad_3_analog_v   (joystick_analog_l3[15:8]),
+   .pad_1_analog_h   (status[61] ? joystick_analog_r0[7:0]:joystick_analog_l1[7:0]),
+   .pad_1_analog_v   (status[61] ? joystick_analog_r0[15:8]:joystick_analog_l1[15:8]),
+   .pad_2_analog_h   (status[62] ? joystick_analog_r0[7:0]:joystick_analog_l2[7:0]),
+   .pad_2_analog_v   (status[62] ? joystick_analog_r0[15:8]:joystick_analog_l2[15:8]),
+   .pad_3_analog_h   (status[61] ? joystick_analog_r2[7:0] : status[62]? joystick_analog_r1[7:0] : joystick_analog_l3[7:0]),
+   .pad_3_analog_v   (status[61] ? joystick_analog_r2[15:8] : status[62]? joystick_analog_r1[15:8] : joystick_analog_l3[15:8]),
    
    // audio
    .sound_out_left   (AUDIO_L),

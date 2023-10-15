@@ -42,6 +42,14 @@ List of Errors:
 - Bit 23 - RSP PC is modified by register access while RSP runs
 - Bit 24 - VI line processing wasn't able to complete in time
 - Bit 25 - RDP Mux missed request
+
+## Controller info
+
+The P1 controls P2/P3 setting applies the following changes:
+- P1 Right Stick controls the P2/P3 control sticks.
+- P3/2 Right Stick controls the P4 control stick.
+- P1 C-Right button also affects P2/P3 Z button.
+- P3/2 C-Right button also affects P4 Z button.
   
 ## Status
 
