@@ -15,6 +15,7 @@ entity RDP_FBread is
       settings_colorImage     : in  tsettings_colorImage;
       
       xIndexPx                : in  unsigned(11 downto 0);
+      xIndexPxZ               : in  unsigned(11 downto 0);
       xIndex9                 : in  unsigned(11 downto 0);
       yOdd                    : in  std_logic;
       
@@ -62,7 +63,7 @@ begin
    
    FBAddr9 <= yOdd & xIndex9(10 downto 4);
    
-   FBAddrZ <= yOdd & xIndexPx(10 downto 0);
+   FBAddrZ <= yOdd & xIndexPxZ(10 downto 0);
    
    
    process (clk1x)
@@ -126,10 +127,16 @@ begin
                   end if;
                   
                when SIZE_32BIT =>
-                  FBcolor(0) <= Fbdata(31 downto 24);
-                  FBcolor(1) <= Fbdata(23 downto 16);
-                  FBcolor(2) <= Fbdata(15 downto 8);
-                  FBcolor(3) <= x"E0"; -- todo: unclear
+                  FBcolor(0) <= Fbdata( 7 downto  0);
+                  FBcolor(1) <= Fbdata(15 downto  8);
+                  FBcolor(2) <= Fbdata(23 downto 16);
+                  if (settings_otherModes.imageRead = '1') then
+                     FBcolor(3) <= Fbdata(31 downto 29) & "00000";
+                     cvgFB      <= Fbdata(31 downto 29);
+                  else
+                     FBcolor(3) <= x"E0";
+                     cvgFB      <= (others => '1');
+                  end if;
                
                when others => null;
             end case;

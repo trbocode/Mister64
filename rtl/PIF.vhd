@@ -106,6 +106,7 @@ architecture arch of pif is
    constant CIC_TYPE_8401 : std_logic_vector(3 downto 0) := "1011";
    constant CIC_TYPE_5167 : std_logic_vector(3 downto 0) := "1100";
    constant CIC_TYPE_DDUS : std_logic_vector(3 downto 0) := "1101";
+   constant CIC_TYPE_5101 : std_logic_vector(3 downto 0) := "1110";
    
    signal INITDONE         : std_logic := '0';
    
@@ -326,8 +327,9 @@ begin
          when CIC_TYPE_7106 => cic_seed <= x"85"; cic_version <= '0'; cic_type <= '0';
          when CIC_TYPE_8303 => cic_seed <= x"DD"; cic_version <= '0'; cic_type <= '1';
          when CIC_TYPE_8401 => cic_seed <= x"DD"; cic_version <= '0'; cic_type <= '1';
-         when CIC_TYPE_5167 => cic_seed <= x"3F"; cic_version <= '0'; cic_type <= '0';
+         when CIC_TYPE_5167 => cic_seed <= x"DD"; cic_version <= '0'; cic_type <= '0';
          when CIC_TYPE_DDUS => cic_seed <= x"DE"; cic_version <= '0'; cic_type <= '1';
+         when CIC_TYPE_5101 => cic_seed <= x"AC"; cic_version <= '0'; cic_type <= '0';
          when others => null;
       end case;
    end process;

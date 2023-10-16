@@ -274,7 +274,7 @@ parameter CONF_STR = {
 	"P2O[64],Auto Detect,On,Off;",
    "P2O[70],RAM size,8MByte,4MByte;",
    "P2O[80:79],System Type,NTSC,PAL;",
-	"P2O[68:65],CIC,6101,6102,7101,7102,6103,7103,6105,7105,6106,7106,8303,8401,5167,DDUS;",
+	"P2O[68:65],CIC,6101,6102,7101,7102,6103,7103,6105,7105,6106,7106,8303,8401,5167,DDUS,5101;",
    "P2O[71],ControllerPak,Off,On;",
    "P2R[81],Format CPAK now;",
    "P2O[72],RumblePak,Off,On;",

@@ -36,6 +36,7 @@ entity RDP_pipeline is
       pipeIn_Addr             : in  unsigned(25 downto 0);
       pipeIn_AddrZ            : in  unsigned(25 downto 0);
       pipeIn_xIndexPx         : in  unsigned(11 downto 0);
+      pipeIn_xIndexPxZ        : in  unsigned(11 downto 0);
       pipeIn_xIndex9          : in  unsigned(11 downto 0);
       pipeIn_X                : in  unsigned(11 downto 0);
       pipeIn_Y                : in  unsigned(11 downto 0);
@@ -409,10 +410,12 @@ begin
       if (stage_copySize(STAGE_PALETTE) <= 3) then copyBE(3) <= '0'; end if;
       if (stage_copySize(STAGE_PALETTE) <= 2) then copyBE(2) <= '0'; end if;
       if (stage_copySize(STAGE_PALETTE) <= 1) then copyBE(1) <= '0'; end if;
-      if (texture_copy(48) = '0') then copyBE(1 downto 0) <= "00"; end if;
-      if (texture_copy(32) = '0') then copyBE(3 downto 2) <= "00"; end if;
-      if (texture_copy(16) = '0') then copyBE(5 downto 4) <= "00"; end if;
-      if (texture_copy( 0) = '0') then copyBE(7 downto 6) <= "00"; end if;
+      if (settings_otherModes.alphaCompare = '1') then
+         if (texture_copy(48) = '0') then copyBE(1 downto 0) <= "00"; end if;
+         if (texture_copy(32) = '0') then copyBE(3 downto 2) <= "00"; end if;
+         if (texture_copy(16) = '0') then copyBE(5 downto 4) <= "00"; end if;
+         if (texture_copy( 0) = '0') then copyBE(7 downto 6) <= "00"; end if;
+      end if;
    end process;
    
    copyBEShifted     <= copyBE sll to_integer(copyAddr(2 downto 0));
@@ -1325,6 +1328,7 @@ begin
       settings_colorImage     => settings_colorImage,
                                                     
       xIndexPx                => pipeIn_xIndexPx,            
+      xIndexPxZ               => pipeIn_xIndexPxZ,            
       xIndex9                 => pipeIn_xIndex9,           
       yOdd                    => pipeIn_Y(0),               
                                                     

@@ -70,6 +70,7 @@ entity RDP_raster is
       pipeIn_Addr             : out unsigned(25 downto 0) := (others => '0');
       pipeIn_AddrZ            : out unsigned(25 downto 0) := (others => '0');
       pipeIn_xIndexPx         : out unsigned(11 downto 0) := (others => '0');
+      pipeIn_xIndexPxZ        : out unsigned(11 downto 0) := (others => '0');
       pipeIn_xIndex9          : out unsigned(11 downto 0) := (others => '0');
       pipeIn_X                : out unsigned(11 downto 0) := (others => '0');
       pipeIn_Y                : out unsigned(11 downto 0) := (others => '0');
@@ -265,6 +266,7 @@ architecture arch of RDP_raster is
    signal line_indexX      : unsigned(11 downto 0) := (others => '0');
    signal line_indexX9     : unsigned(11 downto 0) := (others => '0');
    signal line_offsetPx    : unsigned(2 downto 0) := (others => '0');
+   signal line_offsetPxZ   : unsigned(1 downto 0) := (others => '0');
    signal line_stepsize    : integer range 1 to 4 := 1;
    
    signal xDiff            : signed(11 downto 0);
@@ -908,6 +910,7 @@ begin
                      when SIZE_32BIT => line_offsetPx <= "00" & lineInfo.xStart(0);
                      when others => null;
                   end case;
+                  line_offsetPxZ <= lineInfo.xStart(1 downto 0);
                   
                   if (settings_poly.lft = '1') then
                      xDiff       <= signed(lineInfo.xStart) - lineInfo.unscrx(11 downto 0);
@@ -971,6 +974,7 @@ begin
                   pipeIn_Addr       <= calcPixelAddr;
                   pipeIn_AddrZ      <= calcPixelAddrZ;
                   pipeIn_xIndexPx   <= line_indexX + line_offsetPx;
+                  pipeIn_xIndexPxZ  <= line_indexX + line_offsetPxZ;
                   pipeIn_xIndex9    <= line_indexX9;
                   pipeIn_X          <= line_posX;
                   pipeIn_Y          <= line_posY;

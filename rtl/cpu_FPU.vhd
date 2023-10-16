@@ -599,7 +599,7 @@ begin
          outputInvalid_1 <= outputInvalid and (not exceptionFPU);
       
          FPUWriteEnable                <= '0';
-         error_FPU                     <= '0';           
+         error_FPU                     <= exceptionFPU;           
          ADD_start                     <= '0';
          SUB_start                     <= '0';
          MUL_start                     <= '0';

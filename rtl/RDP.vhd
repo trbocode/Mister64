@@ -277,6 +277,7 @@ architecture arch of RDP is
    signal pipeIn_Addr               : unsigned(25 downto 0);
    signal pipeIn_AddrZ              : unsigned(25 downto 0);
    signal pipeIn_xIndexPx           : unsigned(11 downto 0);
+   signal pipeIn_xIndexPxZ          : unsigned(11 downto 0);
    signal pipeIn_xIndex9            : unsigned(11 downto 0);
    signal pipeIn_X                  : unsigned(11 downto 0);
    signal pipeIn_Y                  : unsigned(11 downto 0);
@@ -623,28 +624,6 @@ begin
                   sdram_finished    <= (not wait9) or (not read9); --'0';
                   sdramZ_finished   <= (not wait9) or (not read9); --'0';
                   
-                  if (settings_otherModes.imageRead = '1' and settings_otherModes.cycleType /= "10") then
-                     rdram_request     <= '1';
-                     rdram_address     <= "00" & FB_req_addr(25 downto 3) & "000";
-                     rdram_finished    <= '0';
-                     FBRAMgrant        <= '0';
-                  else
-                     rdram_finished    <= '1';
-                     FBRAMgrant        <= '1';
-                     if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
-                        rdram_request  <= '1';
-                        rdram_address  <= "00" & FB_reqZ_addr(25 downto 3) & "000";
-                     end if;
-                  end if;
-
-                  if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
-                     rdramZ_finished   <= '0';
-                     FBRAMZgrant       <= '0';
-                  else
-                     rdramZ_finished   <= '1';
-                     FBRAMZgrant       <= '1';
-                  end if;
-                  
                   -- todo: must increase line size if games really use more than 2048 pixels in 16bit mode or 1024 pixels in 32 bit mode
                   -- todo: fetching could be optimized to only read 1 additional word when border between words was really crossed
                   if (settings_colorImage.FB_size = SIZE_4BIT or settings_colorImage.FB_size = SIZE_8BIT) then
@@ -655,6 +634,29 @@ begin
                      rdram_burstcount  <= '0' & to_unsigned((to_integer(FBsize) + 3) / 2,9);
                   end if;
                   
+                  if (settings_otherModes.imageRead = '1' and settings_otherModes.cycleType /= "10") then
+                     rdram_request     <= '1';
+                     rdram_address     <= "00" & FB_req_addr(25 downto 3) & "000";
+                     rdram_finished    <= '0';
+                     FBRAMgrant        <= '0';
+                  else
+                     rdram_finished    <= '1';
+                     FBRAMgrant        <= '1';
+                     if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
+                        rdram_request     <= '1';
+                        rdram_address     <= "00" & FB_reqZ_addr(25 downto 3) & "000";
+                        rdram_burstcount  <= '0' & to_unsigned((to_integer(FBsize) + 7) / 4,9);
+                     end if;
+                  end if;
+
+                  if (settings_otherModes.zCompare = '1' and settings_otherModes.cycleType /= "10") then
+                     rdramZ_finished   <= '0';
+                     FBRAMZgrant       <= '0';
+                  else
+                     rdramZ_finished   <= '1';
+                     FBRAMZgrant       <= '1';
+                  end if;
+
                   sdram_request     <= read9; --'1';
                   sdram_address     <= 7x"0" & FB_req_addr(22 downto 5) & "00";
                   sdram_burstcount  <=  '0' & to_unsigned((to_integer(FBsize) + 31) / 16,7);
@@ -708,8 +710,9 @@ begin
                if (rdram_done = '1' and FBRAMgrant = '1' and rdram_finished = '0') then 
                   rdram_finished_new := '1'; 
                   if (settings_otherModes.zCompare = '1' and readZ = '1' and settings_otherModes.cycleType /= "10") then
-                     rdram_request <= '1';
-                     rdram_address <= "00" & FB_reqZ_addr(25 downto 3) & "000";
+                     rdram_request     <= '1';
+                     rdram_address     <= "00" & FB_reqZ_addr(25 downto 3) & "000";
+                     rdram_burstcount  <= '0' & to_unsigned((to_integer(FBsize) + 7) / 4,9);
                   else
                      rdramZ_finished_new := '1';
                   end if;
@@ -990,6 +993,7 @@ begin
       pipeIn_Addr             => pipeIn_Addr,   
       pipeIn_AddrZ            => pipeIn_AddrZ,   
       pipeIn_xIndexPx         => pipeIn_xIndexPx,      
+      pipeIn_xIndexPxZ        => pipeIn_xIndexPxZ,      
       pipeIn_xIndex9          => pipeIn_xIndex9,      
       pipeIn_X                => pipeIn_X,      
       pipeIn_Y                => pipeIn_Y, 
@@ -1207,6 +1211,7 @@ begin
       pipeIn_Addr             => pipeIn_Addr,   
       pipeIn_AddrZ            => pipeIn_AddrZ,   
       pipeIn_xIndexPx         => pipeIn_xIndexPx,      
+      pipeIn_xIndexPxZ        => pipeIn_xIndexPxZ,      
       pipeIn_xIndex9          => pipeIn_xIndex9,      
       pipeIn_X                => pipeIn_X,      
       pipeIn_Y                => pipeIn_Y,      
@@ -1481,7 +1486,7 @@ begin
                pixel9data   <= pixel9data or std_logic_vector(copyPixelData9);
             end if;
          
-         elsif (writePixel = '1' and writePixelAddr(25 downto 23) = 0) then
+         elsif (writePixel = '1' and writePixelAddr(25 downto 23) = 0 and settings_colorImage.FB_size = SIZE_16BIT) then
          
             pixel9BE <= x"F";
          
@@ -1492,10 +1497,8 @@ begin
                pixel9filled <= '1';
             end if;
             
-            if (settings_colorImage.FB_size = SIZE_16BIT) then
-               pixel9data((to_integer(writePixelAddr(4 downto 1)) * 2) + 1) <= writePixelCvg(1);
-               pixel9data((to_integer(writePixelAddr(4 downto 1)) * 2) + 0) <= writePixelCvg(0);
-            end if;
+            pixel9data((to_integer(writePixelAddr(4 downto 1)) * 2) + 1) <= writePixelCvg(1);
+            pixel9data((to_integer(writePixelAddr(4 downto 1)) * 2) + 0) <= writePixelCvg(0);
          
          elsif (poly_done = '1') then
 
@@ -1962,7 +1965,7 @@ begin
                   addr := "000" & unsigned(fifoout_Din(83 downto 64)) & "000";
                   data := unsigned(fifoout_Din(63 downto 0));
                   
-                  -- resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
+                  -- resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26)
                   linesize := (to_integer(settings_colorImage.FB_width_m1) + 1) * 2;                
                   calcaddr := to_integer(addr) - to_integer(settings_colorImage.FB_base);
                   ypos     := calcaddr / linesize;
@@ -1988,7 +1991,33 @@ begin
    
                elsif (settings_colorImage.FB_size = SIZE_32BIT) then     
                
-                  null;
+                  be   := unsigned(fifoout_Din(91 downto 84));
+                  addr := "000" & unsigned(fifoout_Din(83 downto 64)) & "000";
+                  data := unsigned(fifoout_Din(63 downto 0));
+                  
+                  -- resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 4, 26)
+                  linesize := (to_integer(settings_colorImage.FB_width_m1) + 1) * 4;                
+                  calcaddr := to_integer(addr) - to_integer(settings_colorImage.FB_base);
+                  ypos     := calcaddr / linesize;
+                  xpos     := (calcaddr - (ypos * linesize)) / 4;
+                  
+                  for i in 0 to 1 loop
+                     if (be(3 downto 0) = "1111") then
+                        data(31 downto 0) := byteswap32(data(31 downto 0));                  
+                        color(23 downto 16) := data(31 downto 24);
+                        color(15 downto  8) := data(23 downto 16);
+                        color( 7 downto  0) := data(15 downto  8);
+                        write(line_out, to_integer(color));
+                        write(line_out, string'("#"));
+                        write(line_out, xpos);
+                        write(line_out, string'("#")); 
+                        write(line_out, ypos);
+                        writeline(outfile, line_out);
+                     end if;
+                     xpos := xpos + 1;
+                     data := 32x"0" & data(63 downto 32);
+                     be := "0000" & be(7 downto 4);
+                  end loop;
                   
                end if;
                

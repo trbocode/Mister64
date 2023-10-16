@@ -130,10 +130,10 @@ begin
    maskShifted <= shift_right(to_unsigned(16#FFFF#, 16), 16 - maskShift);
    mask        <= maskShifted(9 downto 0);
    
-   wrap_index    <= '0' & clamp_index;
-   wrap_index1   <= '0' & clamp_index1;
-   wrap_index2   <= '0' & clamp_index2;
-   wrap_index3   <= '0' & clamp_index3;
+   wrap_index    <= clamp_index(clamp_index'left)  & clamp_index;
+   wrap_index1   <= clamp_index1(clamp_index'left) & clamp_index1;
+   wrap_index2   <= clamp_index2(clamp_index'left) & clamp_index2;
+   wrap_index3   <= clamp_index3(clamp_index'left) & clamp_index3;
    
    wrap          <= wrap_index(maskShift);
    wrap1         <= wrap_index1(maskShift);
