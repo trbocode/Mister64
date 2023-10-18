@@ -596,6 +596,8 @@ begin
       error_drawMode       => errorRDP_drawMode,
       error_RDPMEMMUX      => error_RDPMEMMUX,
       
+      CICTYPE              => CICTYPE,
+      
       DISABLEFILTER        => DISABLEFILTER,
       DISABLEDITHER        => DISABLEDITHER,
       write9               => write9,
