@@ -22,6 +22,8 @@ entity RDP is
       error_drawMode       : out std_logic; 
       error_RDPMEMMUX      : out std_logic; 
       
+      CICTYPE              : in  std_logic_vector(3 downto 0);
+      
       DISABLEFILTER        : in  std_logic;
       DISABLEDITHER        : in  std_logic;
       write9               : in  std_logic;
@@ -468,6 +470,11 @@ begin
                   DPC_STATUS_start_gclk <= '0';
                end if;
    
+               -- some games like NBA JAM just need the clock timer ticking up and some games like OOT depend on them being either zero or very accurate
+               -- as timing is not yet accurate enough, only activate it outside of CIC 6105 here
+               if (CICTYPE(2) = '0') then
+                  DPC_CLOCK <= DPC_CLOCK + 1;
+               end if;
    
                -- bus read
                if (bus_read = '1') then
