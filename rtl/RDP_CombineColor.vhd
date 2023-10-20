@@ -27,6 +27,7 @@ entity RDP_CombineColor is
       tex2_alpha              : in  unsigned(7 downto 0);
       lod_frac                : in  unsigned(7 downto 0);
       combine_alpha           : in  unsigned(7 downto 0);
+      random2                 : in  unsigned(1 downto 0);
 
       combine_color           : out tcolor3_u8
    );
@@ -87,7 +88,7 @@ begin
             when 4 => color_sub1(i) <= pipeInColor(i);
             when 5 => color_sub1(i) <= x"00" & signed(envcolor(i));
             when 6 => color_sub1(i) <= 16x"100";
-            when 7 => errorCombine <= '1'; --noise
+            when 7 => color_sub1(i) <= x"00" & signed(random2) & "100000";
             when others => null;
          end case;
          

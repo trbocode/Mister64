@@ -261,6 +261,8 @@ architecture arch of RDP_pipeline is
    signal zResultH            : unsigned(1 downto 0);
    signal zCVGCount           : unsigned(3 downto 0);
    
+   signal lfsr                : unsigned(22 downto 0) := (others => '0');
+   
    type tblendmults is array(0 to 15) of unsigned(17 downto 0);
    constant blendmults : tblendmults := 
    (
@@ -448,6 +450,9 @@ begin
          if (step2 = '1') then
             settings_tile1_1 <= settings_tile;
          end if;
+         
+         lfsr(22 downto 1) <= lfsr(21 downto 0);
+         lfsr(0) <= not(lfsr(22) xor lfsr(18));
          
          -- synthesis translate_off
          export_pipeDone <= '0';
@@ -1258,6 +1263,8 @@ begin
       
       X_in                 => stage_x(STAGE_TEXREAD),
       Y_in                 => stage_y(STAGE_TEXREAD),
+      random3              => lfsr(5 downto 3),
+      random2              => lfsr(1 downto 0),
                                          
       ditherColor          => ditherColor,
       ditherAlpha          => ditherAlpha
@@ -1286,6 +1293,7 @@ begin
       tex2_alpha              => texture2_alpha,
       lod_frac                => x"FF", -- todo
       combine_alpha           => combine_alpha,
+      random2                 => lfsr(1 downto 0),
      
       combine_color           => combine_color
    );
@@ -1372,6 +1380,7 @@ begin
       FB_color                => stage_FBcolor(STAGE_COMBINER),     
       blend_shift_a           => "000",
       blend_shift_b           => "000",
+      random8                 => lfsr(7 downto 0),
       
       blend_alphaIgnore       => blend_alphaIgnore,
       blend_divEna            => blend_divEna,

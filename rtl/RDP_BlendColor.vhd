@@ -26,6 +26,7 @@ entity RDP_BlendColor is
       FB_color                : in  tcolor4_u8;
       blend_shift_a           : in unsigned(2 downto 0);
       blend_shift_b           : in unsigned(2 downto 0);
+      random8                 : in unsigned(7 downto 0);
       
       blend_alphaIgnore       : out std_logic := '0';
       blend_divEna            : out std_logic := '0';
@@ -213,7 +214,9 @@ begin
                      blend_alphaIgnore <= '1';
                   end if;
                else
-                  -- todo: dither alpha
+                  if (combine_alpha < random8) then
+                     blend_alphaIgnore <= '1';
+                  end if;
                end if;
             end if;
             

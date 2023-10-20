@@ -126,15 +126,6 @@ begin
       eeprom_wren          => '0',
       eeprom_in            => 32x"0",
       
-      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
-      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
-      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
-      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
-      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
-      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
-      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
-      sdram_dataRead       => sdramMux_dataRead,
-      
       SS_reset             => '0',
       loading_savestate    => '0',
       SS_DataWrite         => 64x"0",
@@ -150,6 +141,8 @@ begin
    (
       clk1x                => clk1x,
       reset                => reset,
+      
+      second_ena           => '1',
      
       PADCOUNT             => PADCOUNT,
       PADTYPE0             => "01",
@@ -194,13 +187,27 @@ begin
       pad_2_analog_h       => x"00",
       pad_2_analog_v       => x"00",
       pad_3_analog_h       => x"00",
-      pad_3_analog_v       => x"00"
+      pad_3_analog_v       => x"00",
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead
    );
    
    iSDRamMux : entity n64.SDRamMux
+   generic map
+   (
+      FASTSIM => '0'
+   )
    port map
    (
       clk1x                => clk1x,
+      ss_reset             => '0',
                            
       error                => open,
                            
@@ -224,7 +231,7 @@ begin
       sdramMux_dataRead    => sdramMux_dataRead,
       
       rdp9fifo_reset       => '0',   
-      rdp9fifo_Din         => 50x"0",     
+      rdp9fifo_Din         => 54x"0",     
       rdp9fifo_Wr          => '0',      
       
       rdp9fifoZ_reset      => '0',   

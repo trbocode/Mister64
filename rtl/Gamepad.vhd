@@ -7,6 +7,8 @@ entity Gamepad is
    (
       clk1x                : in  std_logic;
       reset                : in  std_logic;
+      
+      second_ena           : in  std_logic;
      
       PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1
       PADTYPE0             : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
@@ -51,29 +53,31 @@ entity Gamepad is
       pad_2_analog_h       : in  std_logic_vector(7 downto 0);
       pad_2_analog_v       : in  std_logic_vector(7 downto 0);      
       pad_3_analog_h       : in  std_logic_vector(7 downto 0);
-      pad_3_analog_v       : in  std_logic_vector(7 downto 0)
+      pad_3_analog_v       : in  std_logic_vector(7 downto 0);
       
-      --rumble               : out std_logic_vector(3 downto 0) := (others => '0');
+      rumble               : out std_logic_vector(3 downto 0) := (others => '0');
       
-      --cpak_change          : out std_logic := '0';
-      --
-      --sdram_request        : out std_logic := '0';
-      --sdram_rnw            : out std_logic := '0'; 
-      --sdram_address        : out unsigned(26 downto 0):= (others => '0');
-      --sdram_burstcount     : out unsigned(7 downto 0):= (others => '0');
-      --sdram_writeMask      : out std_logic_vector(3 downto 0) := (others => '0'); 
-      --sdram_dataWrite      : out std_logic_vector(31 downto 0) := (others => '0');
-      --sdram_done           : in  std_logic;
-      --sdram_dataRead       : in  std_logic_vector(31 downto 0);
+      cpak_change          : out std_logic := '0';
+      
+      sdram_request        : out std_logic := '0';
+      sdram_rnw            : out std_logic := '0'; 
+      sdram_address        : out unsigned(26 downto 0):= (others => '0');
+      sdram_burstcount     : out unsigned(7 downto 0):= (others => '0');
+      sdram_writeMask      : out std_logic_vector(3 downto 0) := (others => '0'); 
+      sdram_dataWrite      : out std_logic_vector(31 downto 0) := (others => '0');
+      sdram_done           : in  std_logic;
+      sdram_dataRead       : in  std_logic_vector(31 downto 0)
    );
 end entity;
 
 architecture arch of Gamepad is
 
+   signal INITDONE         : std_logic := '0';
+
    type tState is
    (
       IDLE,
-      TRANSMITWAIT0,
+      WAITSLOW,
       
       RESPONSETYPE0,
       RESPONSETYPE1,
@@ -84,12 +88,26 @@ architecture arch of Gamepad is
       RESPONSEPAD2,
       RESPONSEPAD3,
       
+      PAK_READADDR1,
+      PAK_READADDR2,
+      PAKCRC,
+      
+      PAKREAD_READSDRAM,
+      PAKREAD_WRITEPIF,
+      PAKREAD_CHECKNEXT,
+      
+      PAKWRITE_READPIF,
+      PAKWRITE_WRITESDRAM,
+      PAKWRITE_CHECKNEXT,
+      
       SENDEMPTY
    );
    signal state                     : tState := IDLE;
+   signal stateNext                 : tState := IDLE;
    
    signal slowcnt                   : unsigned(11 downto 0) := (others => '0');
    signal slowNextByteEna           : std_logic;
+   signal sendcount                 : unsigned(5 downto 0) := (others => '0');
    signal receivecount              : unsigned(5 downto 0) := (others => '0');
    
    signal PADTYPE                   : std_logic_vector(1 downto 0);
@@ -111,6 +129,25 @@ architecture arch of Gamepad is
                                    
    signal pad_muxed_analogH         : std_logic_vector(7 downto 0);
    signal pad_muxed_analogV         : std_logic_vector(7 downto 0);
+   
+   -- PAKs
+   signal pakwrite                  : std_logic;
+   signal pakaddr                   : std_logic_vector(15 downto 0) := (others => '0');
+   signal pakvalue                  : std_logic_vector(7 downto 0);
+   
+   signal pakcrc_count              : unsigned(2 downto 0);
+   signal pakcrc_value              : std_logic_vector(7 downto 0);
+   signal pakcrc_last               : std_logic;
+   
+   type tCPAKINITState is
+   (
+      PAKINIT_IDLE,
+      PAKINIT_WRITESDRAM,
+      PAKINIT_WAITSDRAM
+   );
+   signal PAKINITState              : tCPAKINITState := PAKINIT_IDLE;
+   signal pakinit_addr              : unsigned(14 downto 0) := (others => '0');
+   signal pakinit_data              : std_logic_vector(31 downto 0);
    
 begin 
 
@@ -145,42 +182,106 @@ begin
    end process;
               
    slowNextByteEna <= slowcnt(slowcnt'left) when (PADSLOW = '1') else slowcnt(2);
-               
+           
+   ipif_cpakinit : entity work.pif_cpakinit
+   port map
+   (
+      clk       => clk1x,
+      address   => std_logic_vector(pakinit_addr(6 downto 0)),
+      data      => pakinit_data
+   );
+   
+   sdram_burstcount <= x"01";
+           
    process (clk1x)
    begin
       if rising_edge(clk1x) then
       
          toPIF_timeout <= '0';
          toPIF_ena     <= '0';
+         sdram_request <= '0';
+         cpak_change   <= '0';
          
          if (slowNextByteEna = '1') then
             slowcnt <= (others => '0');
          else
             slowcnt <= slowcnt + 1;
          end if;
-      
+         
+         -- init PAK area
+         if (second_ena = '1' and INITDONE = '0') then
+            INITDONE     <= '1';
+            PAKINITState <= PAKINIT_WRITESDRAM;
+         end if;
+         if (CPAKFORMAT = '1') then
+            PAKINITState <= PAKINIT_WRITESDRAM;
+            pakinit_addr <= (others => '0');
+         end if;
+         
+         case (PAKINITState) is      
+               
+            when PAKINIT_IDLE => null;
+            
+            when PAKINIT_WRITESDRAM =>
+               PAKINITState    <= PAKINIT_WAITSDRAM;
+               sdram_request   <= '1';
+               sdram_rnw       <= '0';
+               sdram_writeMask <= "1111";
+               sdram_address   <= resize(unsigned(pakinit_addr & "00"), 27) + to_unsigned(16#500000#, 27);
+               if (pakinit_addr(12 downto 0) < 128) then
+                  sdram_dataWrite <= pakinit_data;
+               else
+                  sdram_dataWrite <= (others => '0');
+               end if;
+               pakinit_addr    <= pakinit_addr + 1;
+               if (pakinit_addr = 15x"7FFF") then
+                  PAKINITState <= PAKINIT_IDLE;
+               end if;
+
+            when PAKINIT_WAITSDRAM =>
+               if (sdram_done = '1') then
+                  PAKINITState <= PAKINIT_WRITESDRAM;
+               end if;
+               
+         end case;
+         
+         if (PADTYPE0 /= "10") then rumble(0) <= '0'; end if;
+         if (PADTYPE1 /= "10") then rumble(1) <= '0'; end if;
+         if (PADTYPE2 /= "10") then rumble(2) <= '0'; end if;
+         if (PADTYPE3 /= "10") then rumble(3) <= '0'; end if;
+
          case (state) is
             
             when IDLE =>
-               toPad_ready <= '1';
+               toPad_ready    <= '1';
+               slowcnt        <= (others => '0');
+               sendcount      <= command_sendCnt - 1;
+               pakcrc_value   <= (others => '0');
                if (command_start = '1') then
-                  state       <= TRANSMITWAIT0;
+                  state       <= WAITSLOW;
                   toPad_ready <= '0';
-                  slowcnt     <= (others => '0');
-               end if;
-               
-            when TRANSMITWAIT0 =>
-               if (slowNextByteEna = '1') then
                   if (command_padindex > unsigned(PADCOUNT)) then
                      toPIF_timeout <= '1';
-                     state         <= IDLE;
+                     stateNext     <= IDLE;
                   else
                      if (toPad_data = x"00" or toPad_data = x"FF") then -- type check
-                        state <= RESPONSETYPE0;
+                        stateNext <= RESPONSETYPE0;
                      elsif (toPad_data = x"01") then -- pad response
-                        state <= RESPONSEPAD0;
+                        stateNext <= RESPONSEPAD0;
+                     elsif (toPad_data = x"02") then -- pad read
+                        stateNext <= PAK_READADDR1;
+                        pakwrite  <= '0';
+                     elsif (toPad_data = x"03") then -- pad write
+                        stateNext <= PAK_READADDR1;
+                        pakwrite  <= '1';
                      end if;
                   end if;
+               end if;
+               
+            when WAITSLOW =>
+               if (slowNextByteEna = '1') then
+                  state       <= stateNext;
+                  toPad_ready <= '1';
                end if;
              
 ----------------------------- type -------------------------------
@@ -195,7 +296,6 @@ begin
                end if;
                
                toPIF_data <= x"05";
-               
             
             when RESPONSETYPE1 =>   
                if (slowNextByteEna = '1') then
@@ -208,7 +308,6 @@ begin
                end if;
                
                toPIF_data <= x"00";
-               
             
             when RESPONSETYPE2 => 
                if (slowNextByteEna = '1') then
@@ -317,6 +416,172 @@ begin
                   elsif (pad_muxed_DPAD_DOWN = '1')                                                              then toPIF_data <= std_logic_vector(to_signed(-69,8));
                   else toPIF_data <= (others => '0'); end if;
                end if;
+               
+----------------------------- PAK common -------------------------------
+               when PAK_READADDR1 =>
+                  if (sendcount = 0) then
+                     state         <= IDLE;
+                     toPIF_timeout <= '1';
+                  end if;
+                  if (toPad_ena = '1') then
+                     state                <= WAITSLOW;
+                     toPad_ready          <= '0';
+                     stateNext            <= PAK_READADDR2;
+                     sendcount            <= sendcount - 1;
+                     pakaddr(15 downto 8) <= toPad_data;
+                  end if;
+
+               when PAK_READADDR2 =>
+                  if (sendcount = 0) then
+                     state         <= IDLE;
+                     toPIF_timeout <= '1';
+                  end if;
+                  if (toPad_ena = '1') then
+                     state                <= WAITSLOW;
+                     toPad_ready          <= '0';
+                     sendcount            <= sendcount - 1;
+                     if (pakwrite = '0') then
+                        stateNext <= PAKREAD_READSDRAM;
+                     else
+                        stateNext <= PAKWRITE_READPIF;
+                     end if;
+                     pakaddr(7 downto 5)  <= toPad_data(7 downto 5);
+                  end if;
+                  
+               -- PAK CRC
+               when PAKCRC =>
+                  pakcrc_count <= pakcrc_count + 1;
+                  if (pakcrc_count = 7) then
+                     pakcrc_last <= '0'; 
+                     if (pakcrc_last = '0') then
+                        if (pakwrite = '1') then
+                           state <= PAKWRITE_CHECKNEXT;
+                        else
+                           state <= PAKREAD_CHECKNEXT;
+                        end if;
+                     end if;
+                  end if;
+                  
+                  if (pakcrc_value(7) = '1') then
+                     pakcrc_value <= (pakcrc_value(6 downto 0) & pakvalue(7)) xor x"85";
+                  else
+                     pakcrc_value <= (pakcrc_value(6 downto 0) & pakvalue(7));
+                  end if;
+                  pakvalue <= pakvalue(6 downto 0) & '0';
+                  
+----------------------------- PAK read -------------------------------
+               when PAKREAD_READSDRAM => 
+                  state           <= PAKREAD_WRITEPIF;
+                  sdram_request   <= '1';
+                  sdram_rnw       <= '1';
+                  sdram_address   <= resize(command_padindex & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
+                  
+               when PAKREAD_WRITEPIF =>
+                  if (sdram_done = '1') then
+                     state          <= WAITSLOW;
+                     toPad_ready    <= '0';
+                     stateNext      <= PAKCRC;
+                     toPIF_ena      <= '1';
+                  
+                     pakcrc_count   <= (others => '0');
+                     pakcrc_last    <= '0';
+                     if (pakaddr(4 downto 0) = 5x"1F") then -- last byte will need one additional round of crc with input value 00
+                        pakcrc_last <= '1';
+                     end if;
+                     if (PADTYPE = "10") then -- rumble
+                        if (unsigned(pakaddr) >= 16#8000# and unsigned(pakaddr) < 16#9000#) then
+                           toPIF_data     <= x"80";
+                           pakvalue       <= x"80";
+                        else
+                           toPIF_data     <= x"00";
+                           pakvalue       <= x"00";
+                        end if;
+                     else --cpak
+                        if (pakaddr(15) = '1') then
+                           toPIF_data     <= x"00";
+                           pakvalue       <= x"00";
+                        else
+                           case (pakaddr(1 downto 0)) is
+                              when "00" => toPIF_data <= sdram_dataRead( 7 downto  0); pakvalue <= sdram_dataRead( 7 downto  0);
+                              when "01" => toPIF_data <= sdram_dataRead(15 downto  8); pakvalue <= sdram_dataRead(15 downto  8);
+                              when "10" => toPIF_data <= sdram_dataRead(23 downto 16); pakvalue <= sdram_dataRead(23 downto 16);
+                              when "11" => toPIF_data <= sdram_dataRead(31 downto 24); pakvalue <= sdram_dataRead(31 downto 24);
+                              when others => null;
+                           end case;
+                        end if;
+                     end if;
+                     pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
+                  end if;
+                  
+               when PAKREAD_CHECKNEXT =>
+                  if (pakaddr(4 downto 0) = 5x"0") then
+                     state          <= WAITSLOW;
+                     toPad_ready    <= '0';
+                     stateNext      <= IDLE;
+                     toPIF_data     <= pakcrc_value;
+                     toPIF_ena      <= '1';
+                  else
+                     state <= PAKREAD_READSDRAM;
+                  end if;
+                  
+----------------------------- PAK write -------------------------------
+               when PAKWRITE_READPIF =>
+                  if (sendcount = 0) then
+                     state         <= IDLE;
+                     toPIF_timeout <= '1';
+                  end if;
+                  if (toPad_ena = '1') then
+                     state          <= PAKWRITE_WRITESDRAM;
+                     toPad_ready    <= '0';
+                     sendcount      <= sendcount - 1;
+                     pakvalue       <= toPad_data;
+                     pakaddr(4 downto 0) <= std_logic_vector(unsigned(pakaddr(4 downto 0)) + 1);
+                     if (PADTYPE = "10") then -- rumble
+                        if (pakaddr = x"C000") then
+                           rumble(to_integer(command_padindex(1 downto 0))) <= toPad_data(0);
+                        end if;
+                     else -- cpak
+                        if (pakaddr(15) = '0') then
+                           cpak_change     <= '1';
+                           sdram_request   <= '1';
+                        end if;
+                     end if;
+                  end if;
+                  
+                  sdram_rnw       <= '0';
+                  sdram_address   <= resize(command_padindex & unsigned(pakaddr(14 downto 2)) & "00", 27) + to_unsigned(16#500000#, 27);
+                  sdram_dataWrite <= toPad_data & toPad_data & toPad_data & toPad_data;
+                  case (pakaddr(1 downto 0)) is
+                     when "00" => sdram_writeMask <= "0001";
+                     when "01" => sdram_writeMask <= "0010";
+                     when "10" => sdram_writeMask <= "0100";
+                     when "11" => sdram_writeMask <= "1000";
+                     when others => null;
+                  end case;
+                  
+               when PAKWRITE_WRITESDRAM =>
+                  stateNext <= PAKCRC;
+                  if (sdram_done = '1' or pakaddr(15) = '1' or PADTYPE = "10") then
+                     state          <= PAKCRC;
+                     pakcrc_count   <= (others => '0');
+                     pakcrc_last    <= '0';
+                     if (sendcount = 0) then -- last byte will need one additional round of crc with input value 00
+                        state       <= WAITSLOW;
+                        pakcrc_last <= '1';   
+                     end if;
+                  end if;
+
+               when PAKWRITE_CHECKNEXT =>
+                  if (sendcount = 0) then
+                     state          <= WAITSLOW;
+                     toPad_ready    <= '0';
+                     stateNext      <= IDLE;
+                     toPIF_data     <= pakcrc_value;
+                     toPIF_ena      <= '1';
+                  else
+                     state      <= WAITSLOW;
+                     stateNext  <= PAKWRITE_READPIF;
+                  end if;
             
 ----------------------------- error case of too much data requested -------------------------------
             when SENDEMPTY =>
@@ -333,7 +598,8 @@ begin
          end case;
       
          if (reset = '1') then
-            state <= IDLE;
+            state  <= IDLE;
+            rumble <= (others => '0');
          end if;
          
       end if; -- clock

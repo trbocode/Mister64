@@ -997,24 +997,11 @@ begin
       bus_dataRead         => bus_PIF_dataRead, 
       bus_done             => bus_PIF_done,
       
-      rumble               => rumble,
-      
       eeprom_addr          => eeprom_addr,  
       eeprom_wren          => eeprom_wren,  
       eeprom_in            => eeprom_in,    
       eeprom_out           => eeprom_out,   
       eeprom_change        => eeprom_change,
-      
-      cpak_change          => cpak_change,
-      
-      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
-      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
-      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
-      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
-      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
-      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
-      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
-      sdram_dataRead       => sdramMux_dataRead,
 
       SS_reset             => SS_reset,
       loading_savestate    => loading_savestate,
@@ -1030,6 +1017,8 @@ begin
    (
       clk1x                => clk1x,                
       reset                => reset_intern_1x, 
+      
+      second_ena           => second_ena,
       
       PADCOUNT             => PADCOUNT,
       PADTYPE0             => PADTYPE0,
@@ -1051,7 +1040,9 @@ begin
                                 
       toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
-      toPIF_data           => toPIF_data,        
+      toPIF_data           => toPIF_data,  
+
+      rumble               => rumble,      
 
       pad_A                => pad_A,         
       pad_B                => pad_B,         
@@ -1074,7 +1065,18 @@ begin
       pad_2_analog_h       => pad_2_analog_h,
       pad_2_analog_v       => pad_2_analog_v,
       pad_3_analog_h       => pad_3_analog_h,
-      pad_3_analog_v       => pad_3_analog_v
+      pad_3_analog_v       => pad_3_analog_v,
+            
+      cpak_change          => cpak_change,
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead
    );
 
    rdram_writeMask(DDR3MUX_VI) <= (others => '-');
