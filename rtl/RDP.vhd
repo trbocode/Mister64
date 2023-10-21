@@ -286,9 +286,9 @@ architecture arch of RDP is
    signal pipeIn_cvgValue           : unsigned(7 downto 0);
    signal pipeIn_offX               : unsigned(1 downto 0);
    signal pipeIn_offY               : unsigned(1 downto 0);
-   signal pipeInColor               : tcolor4_s16;
    signal pipeIn_S                  : signed(15 downto 0);
    signal pipeIn_T                  : signed(15 downto 0);
+   signal pipeInColorFull           : tcolor4_s32;
    signal pipeInWCarry              : std_logic;
    signal pipeInWShift              : integer range 0 to 14;
    signal pipeInWNormLow            : unsigned(7 downto 0);
@@ -369,6 +369,7 @@ architecture arch of RDP is
    signal export_pipeDone           : std_logic;       
    signal export_pipeO              : rdp_export_type;
    signal export_Color              : rdp_export_type;
+   signal export_RGBA               : rdp_export_type;
    signal export_LOD                : rdp_export_type;
    signal export_TexCoord           : rdp_export_type;
    signal export_TexFetch0          : rdp_export_type;
@@ -397,7 +398,6 @@ architecture arch of RDP is
    signal export_copyBytes          : rdp_export_type;
    
    signal pipeIn_cvg16              : unsigned(15 downto 0);
-   signal pipeInColorFull           : tcolor4_s32;
    signal pipeInSTWZ                : tcolor4_s32;
    -- synthesis translate_on   
 
@@ -1007,7 +1007,7 @@ begin
       pipeIn_cvgValue         => pipeIn_cvgValue, 
       pipeIn_offX             => pipeIn_offX, 
       pipeIn_offY             => pipeIn_offY, 
-      pipeInColor             => pipeInColor, 
+      pipeInColorFull         => pipeInColorFull,
       pipeIn_S                => pipeIn_S,
       pipeIn_T                => pipeIn_T,
       pipeInWCarry            => pipeInWCarry,   
@@ -1021,7 +1021,6 @@ begin
 
       -- synthesis translate_off
       pipeIn_cvg16            => pipeIn_cvg16, 
-      pipeInColorFull         => pipeInColorFull,
       pipeInSTWZ              => pipeInSTWZ,
       -- synthesis translate_on
 
@@ -1225,7 +1224,7 @@ begin
       pipeIn_cvgValue         => pipeIn_cvgValue,  
       pipeIn_offX             => pipeIn_offX,  
       pipeIn_offY             => pipeIn_offY,  
-      pipeInColor             => pipeInColor,     
+      pipeInColorFull         => pipeInColorFull,
       pipeIn_S                => pipeIn_S,
       pipeIn_T                => pipeIn_T,    
       pipeInWCarry            => pipeInWCarry,   
@@ -1255,12 +1254,12 @@ begin
      
       -- synthesis translate_off
       pipeIn_cvg16            => pipeIn_cvg16,  
-      pipeInColorFull         => pipeInColorFull,
       pipeInSTWZ              => pipeInSTWZ,
       
       export_pipeDone         => export_pipeDone,
       export_pipeO            => export_pipeO,   
       export_Color            => export_Color,   
+      export_RGBA             => export_RGBA,   
       export_LOD              => export_LOD,   
       export_TexCoord         => export_TexCoord,   
       export_TexFetch0        => export_TexFetch0,   
@@ -1677,6 +1676,7 @@ begin
             
                export_gpu32( 3, tracecounts_out( 3), export_pipeO,    outfile); tracecounts_out( 3) <= tracecounts_out( 3) + 1;
                export_gpu32( 4, tracecounts_out( 4), export_color,    outfile); tracecounts_out( 4) <= tracecounts_out( 4) + 1;
+               export_gpu32(25, tracecounts_out(25), export_RGBA,     outfile); tracecounts_out(25) <= tracecounts_out(25) + 1;
                
                texfetch_count := tracecounts_out(7);
                texcolor_count := tracecounts_out(13);
@@ -1794,7 +1794,7 @@ begin
                write(line_out, string'(" D2 "));
                write(line_out, to_hstring(to_unsigned(0, 32)));
                write(line_out, string'(" D3 "));
-               write(line_out, to_hstring(to_unsigned(0, 32)));
+               write(line_out, to_hstring(resize(writePixelData32(31 downto 8), 32)));
                writeline(outfile, line_out);
                tracecounts_out(1) <= tracecounts_out(1) + 1;
             end if;

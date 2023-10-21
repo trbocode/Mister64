@@ -18,12 +18,6 @@ entity pif is
       CICTYPE              : in  std_logic_vector(3 downto 0);
       EEPROMTYPE           : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
       PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1
-      PADTYPE0             : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
-      PADTYPE1             : in  std_logic_vector(1 downto 0);
-      PADTYPE2             : in  std_logic_vector(1 downto 0);
-      PADTYPE3             : in  std_logic_vector(1 downto 0);
-      PADDPADSWAP          : in  std_logic;
-      CPAKFORMAT           : in  std_logic;
       
       error                : out std_logic := '0';
       
@@ -182,8 +176,6 @@ architecture arch of pif is
    type t_responsedata is array(0 to 2) of std_logic_vector(7 downto 0);
    signal EXT_responsedata : t_responsedata;      
    
-   signal PADTYPE                   : std_logic_vector(1 downto 0);
-   
    signal sendcount                 : unsigned(5 downto 0) := (others => '0');
    signal receivecount              : unsigned(5 downto 0) := (others => '0');
    
@@ -283,12 +275,7 @@ begin
          when others => null;
       end case;
    end process;
-   
-   PADTYPE <= PADTYPE0 when (EXT_channel(1 downto 0) = "00") else 
-              PADTYPE1 when (EXT_channel(1 downto 0) = "01") else 
-              PADTYPE2 when (EXT_channel(1 downto 0) = "10") else 
-              PADTYPE3;
-              
+
    command_padindex <= EXT_channel(1 downto 0);
               
    process (clk1x)

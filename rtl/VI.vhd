@@ -194,7 +194,7 @@ begin
             bus_done     <= '0';
             bus_dataRead <= (others => '0');
             
-            if (newLine = '1' and VI_CURRENT = VI_INTR) then
+            if (newLine = '1' and (VI_CURRENT(9 downto 1) & '0') = VI_INTR) then
                irq_out <= '1';
             end if;
 

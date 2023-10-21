@@ -43,7 +43,7 @@ entity RDP_pipeline is
       pipeIn_cvgValue         : in  unsigned(7 downto 0);
       pipeIn_offX             : in  unsigned(1 downto 0);
       pipeIn_offY             : in  unsigned(1 downto 0);
-      pipeInColor             : in  tcolor4_s16;
+      pipeInColorFull         : in  tcolor4_s32;
       pipeIn_S                : in  signed(15 downto 0);
       pipeIn_T                : in  signed(15 downto 0);
       pipeInWCarry            : in  std_logic;
@@ -73,12 +73,12 @@ entity RDP_pipeline is
      
       -- synthesis translate_off
       pipeIn_cvg16            : in  unsigned(15 downto 0);
-      pipeInColorFull         : in  tcolor4_s32;
       pipeInSTWZ              : in  tcolor4_s32;
       
       export_pipeDone         : out std_logic := '0';       
       export_pipeO            : out rdp_export_type := (others => (others => '0'));
       export_Color            : out rdp_export_type := (others => (others => '0'));
+      export_RGBA             : out rdp_export_type := (others => (others => '0'));
       export_LOD              : out rdp_export_type := (others => (others => '0'));
       export_TexCoord         : out rdp_export_type := (others => (others => '0'));
       export_TexFetch0        : out rdp_export_type := (others => (others => '0'));
@@ -153,7 +153,7 @@ architecture arch of RDP_pipeline is
    type t_stage_u2 is array(0 to STAGE_OUTPUT - 1) of unsigned(1 downto 0);
    type t_stage_s16 is array(0 to STAGE_OUTPUT - 1) of signed(15 downto 0);
    type t_stage_c32s is array(0 to STAGE_OUTPUT - 1) of tcolor4_s32;
-   type t_stage_c16s is array(0 to STAGE_OUTPUT - 1) of tcolor4_s16;
+   type t_stage_c9u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u9;
    type t_stage_c8u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u8;
    type t_stage_c12u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u12;
    type t_stage_c32u is array(0 to STAGE_OUTPUT - 1) of tcolor4_u32;
@@ -170,7 +170,7 @@ architecture arch of RDP_pipeline is
    signal stage_offX          : t_stage_u2 := (others => (others => '0'));
    signal stage_offY          : t_stage_u2 := (others => (others => '0'));
    signal stage_cvgCount      : t_stage_u4 := (others => (others => '0'));
-   signal stage_Color         : t_stage_c16s := (others => (others => (others => '0')));
+   signal stage_Color         : t_stage_c9u := (others => (others => (others => '0')));
    signal stage_FBcolor       : t_stage_c8u := (others => (others => (others => '0')));
    signal stage_cvgFB         : t_stage_u3 := (others => (others => '0'));
    signal stage_blendEna      : t_stage_std := (others => '0');
@@ -194,7 +194,9 @@ architecture arch of RDP_pipeline is
    signal texture_S_unclamped : signed(18 downto 0) := (others => '0');
    signal texture_T_unclamped : signed(18 downto 0) := (others => '0');
    
-   -- modules  
+   -- modules 
+   signal corrected_color     : tcolor4_u9;
+   
    signal texture_color       : tcolor3_u8;
    signal texture_alpha       : unsigned(7 downto 0);   
    signal texture2_color      : tcolor3_u8;
@@ -431,7 +433,7 @@ begin
    copyDataShiftedNext <= 48x"0" & copyData(63 downto 48) when copyAddr(2 downto 0) = "010" else
                           32x"0" & copyData(63 downto 32) when copyAddr(2 downto 0) = "100" else
                           16x"0" & copyData(63 downto 16);   
-      
+                          
    process (clk1x)
       variable cvgCounter : unsigned(3 downto 0);
    begin
@@ -484,7 +486,7 @@ begin
             stage_cvgValue(STAGE_INPUT)   <= pipeIn_cvgValue;
             stage_offX(STAGE_INPUT)       <= pipeIn_offX;
             stage_offY(STAGE_INPUT)       <= pipeIn_offY;
-            stage_Color(STAGE_INPUT)      <= pipeInColor;
+            stage_Color(STAGE_INPUT)      <= corrected_color;
             stage_copySize(STAGE_INPUT)   <= pipeIn_copySize;
             
             cvgCounter := (others => '0');
@@ -796,6 +798,7 @@ begin
             -- synthesis translate_off
             stage_cvg16(STAGE_BLENDER)        <= stage_cvg16(STAGE_COMBINER);
             stage_colorFull(STAGE_BLENDER)    <= stage_colorFull(STAGE_COMBINER);
+            stage_Color(STAGE_BLENDER)        <= stage_Color(STAGE_COMBINER);
             stage_STWZ(STAGE_BLENDER)         <= stage_STWZ(STAGE_COMBINER);
             stage_texCoord_S(STAGE_BLENDER)   <= stage_texCoord_S(STAGE_COMBINER);
             stage_texCoord_T(STAGE_BLENDER)   <= stage_texCoord_T(STAGE_COMBINER);
@@ -899,12 +902,20 @@ begin
             export_Color.y          <= resize(stage_y(STAGE_OUTPUT - 1), 16);
             export_Color.debug1     <= unsigned(stage_colorFull(STAGE_OUTPUT - 1)(0));
             export_Color.debug2     <= unsigned(stage_colorFull(STAGE_OUTPUT - 1)(1));
-            export_Color.debug3     <= unsigned(stage_colorFull(STAGE_OUTPUT - 1)(2));            
+            export_Color.debug3     <= unsigned(stage_colorFull(STAGE_OUTPUT - 1)(2));               
+            
+            export_RGBA.addr        <= 23x"0" & stage_Color(STAGE_OUTPUT - 1)(3);
+            export_RGBA.data        <= (others => '0');
+            export_RGBA.x           <= resize(stage_x(STAGE_OUTPUT - 1), 16);
+            export_RGBA.y           <= resize(stage_y(STAGE_OUTPUT - 1), 16);
+            export_RGBA.debug1      <= 23x"0" & stage_Color(STAGE_OUTPUT - 1)(0);
+            export_RGBA.debug2      <= 23x"0" & stage_Color(STAGE_OUTPUT - 1)(1);
+            export_RGBA.debug3      <= 23x"0" & stage_Color(STAGE_OUTPUT - 1)(2);            
                   
             export_LOD.addr         <= (others => '0');
             export_LOD.data         <= (others => '0');
             export_LOD.x            <= resize(settings_poly.tile, 16);
-            export_LOD.y            <= (others => '0'); --resize(settings_poly.tile + 1, 16);
+            export_LOD.y            <= resize(settings_poly.tile + 1, 16);
             export_LOD.debug1       <= x"000000FF";
             export_LOD.debug2       <= (others => '0');
             export_LOD.debug3       <= (others => '0');            
@@ -1095,6 +1106,17 @@ begin
          
       end if;
    end process;
+   
+   -- RGBA correction - instant before going into pipeline
+   iRDP_RGBACorrection : entity work.RDP_RGBACorrection
+   port map
+   (
+      settings_poly           => settings_poly,
+      offX                    => pipeIn_offX,
+      offY                    => pipeIn_offY,
+      InColor                 => pipeInColorFull,
+      corrected_color         => corrected_color
+   );
    
    -- zBuffer - covers several stages
    iRDP_Zbuffer : entity work.RDP_Zbuffer

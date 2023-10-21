@@ -81,6 +81,7 @@ src/tb/cpu_mul.vhd ^
 ../../rtl/RDP_BlendColor.vhd ^
 ../../rtl/RDP_Zbuffer.vhd ^
 ../../rtl/RDP_DitherCalc.vhd ^
+../../rtl/RDP_RGBACorrection.vhd ^
 ../../rtl/RDP_pipeline.vhd ^
 ../../rtl/RDP.vhd ^
 ../../rtl/DDR3Mux.vhd ^

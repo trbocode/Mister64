@@ -19,7 +19,7 @@ entity RDP_BlendColor is
      
       blend_ena               : in  std_logic;
       zOverflow               : in  std_logic;
-      pipeInColor             : in  tcolor4_s16;
+      pipeInColor             : in  tcolor4_u9;
       combine_color           : in  tcolor3_u8;
       combine_alpha           : in  unsigned(7 downto 0);
       combine_alpha2          : in  unsigned(7 downto 0);

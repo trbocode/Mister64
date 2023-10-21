@@ -77,7 +77,7 @@ entity RDP_raster is
       pipeIn_cvgValue         : out unsigned(7 downto 0) := (others => '0');
       pipeIn_offX             : out unsigned(1 downto 0) := (others => '0');
       pipeIn_offY             : out unsigned(1 downto 0) := (others => '0');
-      pipeInColor             : out tcolor4_s16 := (others => (others => '0'));
+      pipeInColorFull         : out tcolor4_s32 := (others => (others => '0'));
       pipeIn_S                : out signed(15 downto 0) := (others => '0');
       pipeIn_T                : out signed(15 downto 0) := (others => '0');
       pipeInWCarry            : out std_logic := '0';
@@ -91,7 +91,6 @@ entity RDP_raster is
       
       -- synthesis translate_off
       pipeIn_cvg16            : out unsigned(15 downto 0) := (others => '0');
-      pipeInColorFull         : out tcolor4_s32;
       pipeInSTWZ              : out tcolor4_s32;
       -- synthesis translate_on
 
@@ -982,10 +981,10 @@ begin
                   pipeIn_offX       <= offx;
                   pipeIn_offY       <= offy;
                      
-                  pipeInColor(0)    <= pixel_Color_R(31 downto 16);
-                  pipeInColor(1)    <= pixel_Color_G(31 downto 16);
-                  pipeInColor(2)    <= pixel_Color_B(31 downto 16);
-                  pipeInColor(3)    <= pixel_Color_A(31 downto 16);
+                  pipeInColorFull(0) <= pixel_Color_R;
+                  pipeInColorFull(1) <= pixel_Color_G;
+                  pipeInColorFull(2) <= pixel_Color_B;
+                  pipeInColorFull(3) <= pixel_Color_A;
                      
                   pipeIn_S          <= pixel_Texture_S(31 downto 16);
                   pipeIn_T          <= pixel_Texture_T(31 downto 16);
@@ -1025,12 +1024,7 @@ begin
                   end if;
 
                   -- synthesis translate_off
-                  pipeIn_cvg16      <= cvg(0) & cvg(1) & cvg(2) & cvg(3);
-                  
-                  pipeInColorFull(0) <= pixel_Color_R;
-                  pipeInColorFull(1) <= pixel_Color_G;
-                  pipeInColorFull(2) <= pixel_Color_B;
-                  pipeInColorFull(3) <= pixel_Color_A;                  
+                  pipeIn_cvg16      <= cvg(0) & cvg(1) & cvg(2) & cvg(3);     
                   
                   pipeInSTWZ(0)      <= pixel_Texture_S;
                   pipeInSTWZ(1)      <= pixel_Texture_T;

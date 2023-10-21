@@ -955,12 +955,6 @@ begin
       CICTYPE              => CICTYPE,
       EEPROMTYPE           => EEPROMTYPE,
       PADCOUNT             => PADCOUNT,
-      PADTYPE0             => PADTYPE0,
-      PADTYPE1             => PADTYPE1,
-      PADTYPE2             => PADTYPE2,
-      PADTYPE3             => PADTYPE3,
-      PADDPADSWAP          => PADDPADSWAP,
-      CPAKFORMAT           => CPAKFORMAT,
       
       error                => error_pif,
       
