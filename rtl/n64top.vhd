@@ -113,7 +113,21 @@ entity n64top is
       pad_2_analog_v          : in  std_logic_vector(7 downto 0);      
       pad_3_analog_h          : in  std_logic_vector(7 downto 0);
       pad_3_analog_v          : in  std_logic_vector(7 downto 0);
-      
+
+      --snac
+      PIFCOMPARE              : in  std_logic;
+      snac                    : in  std_logic;
+      command_startSNAC       : out std_logic := '0';
+      command_padindexSNAC    : out unsigned(1 downto 0) := (others => '0');
+      command_sendCntSNAC     : out unsigned(5 downto 0) := (others => '0');
+      command_receiveCntSNAC  : out unsigned(5 downto 0) := (others => '0');
+      toPad_enaSNAC           : out std_logic := '0';
+      toPad_dataSNAC          : out std_logic_vector(7 downto 0) := (others => '0');
+      toPad_readySNAC         : in  std_logic;
+      toPIF_timeoutSNAC       : in  std_logic;
+      toPIF_enaSNAC           : in  std_logic;
+      toPIF_dataSNAC          : in  std_logic_vector(7 downto 0);
+     
       -- audio
       sound_out_left          : out std_logic_vector(15 downto 0);
       sound_out_right         : out std_logic_vector(15 downto 0);
@@ -355,6 +369,17 @@ architecture arch of n64top is
    signal toPIF_timeout          : std_logic;   
    signal toPIF_ena              : std_logic;   
    signal toPIF_data             : std_logic_vector(7 downto 0);
+
+   signal command_startUSB        : std_logic;
+   signal command_padindexUSB     : unsigned(1 downto 0);
+   signal command_sendCntUSB      : unsigned(5 downto 0);
+   signal command_receiveCntUSB   : unsigned(5 downto 0);
+   signal toPad_enaUSB            : std_logic;   
+   signal toPad_dataUSB           : std_logic_vector(7 downto 0);     
+   signal toPad_readyUSB          : std_logic;
+   signal toPIF_timeoutUSB        : std_logic;          
+   signal toPIF_enaUSB            : std_logic;   
+   signal toPIF_dataUSB           : std_logic_vector(7 downto 0);  
    
    -- SI/PIF
    signal SIPIF_ramreq           : std_logic;
@@ -942,6 +967,28 @@ begin
       SS_DataRead          => SS_DataRead_PI
    );
    
+    command_startSNAC      <= command_start and (snac or PIFCOMPARE);
+    command_padindexSNAC   <= command_padindex;
+    command_sendCntSNAC    <= command_sendCnt;
+    command_receiveCntSNAC <= command_receiveCnt;
+   
+    toPad_enaSNAC          <= toPad_ena and (snac or PIFCOMPARE);
+    toPad_dataSNAC         <= toPad_data;
+            
+    command_startUSB       <= command_start and (not snac or PIFCOMPARE);
+    command_padindexUSB    <= command_padindex;
+    command_sendCntUSB     <= command_sendCnt;
+    command_receiveCntUSB  <= command_receiveCnt;
+   
+    toPad_enaUSB           <= toPad_ena and (not snac or PIFCOMPARE);
+    toPad_dataUSB          <= toPad_data;        
+   
+    toPad_ready            <= (toPad_readySNAC and toPad_readyUSB) when (PIFCOMPARE = '1') else toPad_readySNAC when (snac = '1') else toPad_readyUSB;
+    
+    toPIF_timeout          <= toPIF_timeoutSNAC when (snac = '1') else toPIF_timeoutUSB;
+    toPIF_ena              <= toPIF_enaSNAC     when (snac = '1') else toPIF_enaUSB;
+    toPIF_data             <= toPIF_dataSNAC    when (snac = '1') else toPIF_dataUSB;
+   
    iPIF : entity work.PIF
    port map
    (
@@ -951,6 +998,7 @@ begin
       
       second_ena           => second_ena,
 
+      PIFCOMPARE           => PIFCOMPARE,
       ISPAL                => ISPAL,
       CICTYPE              => CICTYPE,
       EEPROMTYPE           => EEPROMTYPE,
@@ -968,6 +1016,13 @@ begin
       toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data,  
+      
+      toPIF_timeout1       => toPIF_timeoutUSB,         
+      toPIF_ena1           => toPIF_enaUSB,         
+      toPIF_data1          => toPIF_dataUSB,       
+      toPIF_timeout2       => toPIF_timeoutSNAC,         
+      toPIF_ena2           => toPIF_enaSNAC,         
+      toPIF_data2          => toPIF_dataSNAC,  
       
       pifrom_wraddress     => pifrom_wraddress,
       pifrom_wrdata        => pifrom_wrdata,   
@@ -1023,20 +1078,20 @@ begin
       CPAKFORMAT           => CPAKFORMAT,
       PADSLOW              => PADSLOW,
       
-      command_start        => command_start,     
-      command_padindex     => command_padindex,  
-      command_sendCnt      => command_sendCnt,   
-      command_receiveCnt   => command_receiveCnt,
+      command_start        => command_startUSB,     
+      command_padindex     => command_padindexUSB,  
+      command_sendCnt      => command_sendCntUSB,   
+      command_receiveCnt   => command_receiveCntUSB,
                        
-      toPad_ena            => toPad_ena,         
-      toPad_data           => toPad_data,        
-      toPad_ready          => toPad_ready,        
+      toPad_ena            => toPad_enaUSB,         
+      toPad_data           => toPad_dataUSB,        
+      toPad_ready          => toPad_readyUSB,        
                                 
-      toPIF_timeout        => toPIF_timeout,         
-      toPIF_ena            => toPIF_ena,         
-      toPIF_data           => toPIF_data,  
-
-      rumble               => rumble,      
+      toPIF_timeout        => toPIF_timeoutUSB,         
+      toPIF_ena            => toPIF_enaUSB,         
+      toPIF_data           => toPIF_dataUSB, 
+      
+      rumble               => rumble,        
 
       pad_A                => pad_A,         
       pad_B                => pad_B,         

@@ -14,6 +14,7 @@ entity pif is
       
       second_ena           : in  std_logic;
       
+      PIFCOMPARE           : in  std_logic;
       ISPAL                : in  std_logic;
       CICTYPE              : in  std_logic_vector(3 downto 0);
       EEPROMTYPE           : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
@@ -27,10 +28,17 @@ entity pif is
       command_receiveCnt   : out unsigned(5 downto 0) := (others => '0');
       toPad_ena            : out std_logic := '0';   
       toPad_data           : out std_logic_vector(7 downto 0) := (others => '0');     
-      toPad_ready          : in  std_logic;          
+      toPad_ready          : in  std_logic; 
       toPIF_timeout        : in  std_logic;   
       toPIF_ena            : in  std_logic;   
-      toPIF_data           : in  std_logic_vector(7 downto 0);
+      toPIF_data           : in  std_logic_vector(7 downto 0);     
+      
+      toPIF_timeout1       : in  std_logic;   
+      toPIF_ena1           : in  std_logic;   
+      toPIF_data1          : in  std_logic_vector(7 downto 0);      
+      toPIF_timeout2       : in  std_logic;   
+      toPIF_ena2           : in  std_logic;   
+      toPIF_data2          : in  std_logic_vector(7 downto 0);
       
       pifrom_wraddress     : in  std_logic_vector(9 downto 0);
       pifrom_wrdata        : in  std_logic_vector(31 downto 0);
@@ -157,6 +165,8 @@ architecture arch of pif is
    signal state                     : tState := IDLE;
    signal startup_complete          : std_logic := '0';
    
+   signal slowcnt                   : integer range 0 to 32767;
+   
    signal SIPIF_write_latched       : std_logic := '0';
    signal SIPIF_read_latched        : std_logic := '0';
    signal pifreadmode               : std_logic := '0';
@@ -178,6 +188,14 @@ architecture arch of pif is
    
    signal sendcount                 : unsigned(5 downto 0) := (others => '0');
    signal receivecount              : unsigned(5 downto 0) := (others => '0');
+   
+   signal timeout1                  : std_logic;
+   signal timeout2                  : std_logic;
+   
+   signal receive_done1             : std_logic;
+   signal receive_data1             : std_logic_vector(7 downto 0);
+   signal receive_done2             : std_logic;
+   signal receive_data2             : std_logic_vector(7 downto 0);
    
    -- PIFRAM
    signal pifram_wren               : std_logic := '0';
@@ -291,6 +309,10 @@ begin
          if (second_ena = '1' and INITDONE = '0') then
             INITDONE     <= '1';
             EEPROMState  <= EEPROM_CLEAR;
+         end if;
+         
+         if (slowcnt > 0) then
+            slowcnt <= slowcnt - 1;
          end if;
          
          -- init eeprom
@@ -476,7 +498,8 @@ begin
                   end if;
                   
                when EVALREAD =>
-                  state <= CHECKDONE;
+                  state   <= CHECKDONE;
+                  slowcnt <= 13600;
                   if (ram_q_b(1) = '1') then -- CIC-NUS-6105 challenge/response
                      null;
                   else
@@ -526,13 +549,16 @@ begin
             
                -- extern communication
                when EXTCOMM_FETCHNEXT =>
-                  state         <= EXTCOMM_EVALREAD;
+                  if (slowcnt = 0) then
+                     state         <= EXTCOMM_EVALREAD;
+                  end if;
                   ram_address_b <= std_logic_vector(EXT_index);
                
                when EXTCOMM_EVALREAD =>
                   state <= EXTCOMM_EVALCOMMAND;
                 
                when EXTCOMM_EVALCOMMAND =>
+                  slowcnt <= 1420;
                   if (EXT_index = 63 or ram_q_b = x"FE") then
                      state     <= CHECKDONE;
                      EXT_index <= (others => '0');
@@ -634,6 +660,10 @@ begin
                   state <= EXTCOMM_SEND;
                
                when EXTCOMM_SEND => 
+                  receive_done1 <= '0';
+                  receive_done2 <= '0';
+                  timeout1      <= '0';
+                  timeout2      <= '0';
                   if (toPad_ready = '1') then
                      toPad_data    <= ram_q_b;
                      toPad_ena     <= '1';
@@ -652,15 +682,36 @@ begin
                
                when EXTCOMM_RECEIVE =>
                   EXT_skip          <= '1';
-                  if (toPIF_timeout = '1') then
+                  if (toPIF_timeout1 = '1') then timeout1 <= '1'; end if;
+                  if (toPIF_timeout2 = '1') then timeout2 <= '1'; end if;
+
+                  if (toPIF_ena1 = '1') then
+                     receive_done1 <= '1';
+                     receive_data1 <= toPIF_data1;
+                  end if;
+                  if (toPIF_ena2 = '1') then
+                     receive_done2 <= '1';
+                     receive_data2 <= toPIF_data2;
+                  end if;
+                     
+                  if ((PIFCOMPARE = '0' and toPIF_timeout = '1') or (PIFCOMPARE = '1' and timeout1 = '1' and timeout2 = '1')) then
                      state          <= EXTCOMM_RESPONSE_VALIDOVER;
                      EXT_index      <= EXT_abortAddr;
-                  elsif (toPIF_ena = '1') then
+                  elsif ((PIFCOMPARE = '0' and toPIF_ena = '1') or (PIFCOMPARE = '1' and receive_done1 = '1' and receive_done2 = '1')) then
+                     receive_done1 <= '0';
+                     receive_done2 <= '0';
+                     if (PIFCOMPARE = '1' and receive_data1 /= receive_data2) then
+                        error <= '1';
+                     end if;
                      receivecount   <= receivecount + 1;
                      ram_wren_b     <= '1';
                      EXT_index      <= EXT_index + 1;
                      ram_address_b  <= std_logic_vector(EXT_index + 1);
-                     ram_data_b     <= toPIF_data;
+                     if (PIFCOMPARE = '1') then
+                        ram_data_b     <= receive_data1;
+                     else
+                        ram_data_b     <= toPIF_data;
+                     end if;
                      if (receivecount >= EXT_receive) then
                         state       <= EXTCOMM_RESPONSE_VALIDOVER;
                         EXT_valid   <= '1';
@@ -786,6 +837,7 @@ begin
                   state         <= EXTCOMM_FETCHNEXT;
                   EXT_channel   <= EXT_channel + 1;
                   EXT_index     <= EXT_index + 1;
+                  slowcnt       <= 1420;
             
             end case;
             

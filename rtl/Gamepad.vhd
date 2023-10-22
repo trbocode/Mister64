@@ -92,6 +92,7 @@ architecture arch of Gamepad is
       PAK_READADDR2,
       PAKCRC,
       
+      PAKREAD_WAITFIRST,
       PAKREAD_READSDRAM,
       PAKREAD_WRITEPIF,
       PAKREAD_CHECKNEXT,
@@ -99,6 +100,7 @@ architecture arch of Gamepad is
       PAKWRITE_READPIF,
       PAKWRITE_WRITESDRAM,
       PAKWRITE_CHECKNEXT,
+      PAKWRITE_WAITWRITE,
       
       SENDEMPTY
    );
@@ -181,7 +183,10 @@ begin
       end case;   
    end process;
               
-   slowNextByteEna <= slowcnt(slowcnt'left) when (PADSLOW = '1') else slowcnt(2);
+   --slowNextByteEna <= slowcnt(slowcnt'left) when (PADSLOW = '1') else slowcnt(2);
+   slowNextByteEna <= '1' when (slowcnt = 1986 and PADSLOW = '1') else 
+                      '1' when (slowcnt = 1970 and PADSLOW = '0') else 
+                      '0';
            
    ipif_cpakinit : entity work.pif_cpakinit
    port map
@@ -209,18 +214,17 @@ begin
          end if;
          
          -- init PAK area
-         if (second_ena = '1' and INITDONE = '0') then
-            INITDONE     <= '1';
-            PAKINITState <= PAKINIT_WRITESDRAM;
-         end if;
-         if (CPAKFORMAT = '1') then
-            PAKINITState <= PAKINIT_WRITESDRAM;
-            pakinit_addr <= (others => '0');
-         end if;
-         
          case (PAKINITState) is      
                
             when PAKINIT_IDLE => null;
+               if (second_ena = '1' and INITDONE = '0') then
+                  INITDONE     <= '1';
+                  PAKINITState <= PAKINIT_WRITESDRAM;
+               end if;
+               if (CPAKFORMAT = '1') then
+                  PAKINITState <= PAKINIT_WRITESDRAM;
+                  pakinit_addr <= (others => '0');
+               end if;
             
             when PAKINIT_WRITESDRAM =>
                PAKINITState    <= PAKINIT_WAITSDRAM;
@@ -441,7 +445,7 @@ begin
                      toPad_ready          <= '0';
                      sendcount            <= sendcount - 1;
                      if (pakwrite = '0') then
-                        stateNext <= PAKREAD_READSDRAM;
+                        stateNext <= PAKREAD_WAITFIRST;
                      else
                         stateNext <= PAKWRITE_READPIF;
                      end if;
@@ -470,6 +474,11 @@ begin
                   pakvalue <= pakvalue(6 downto 0) & '0';
                   
 ----------------------------- PAK read -------------------------------
+               when PAKREAD_WAITFIRST =>
+                  if (slowNextByteEna = '1') then
+                     state <= PAKREAD_READSDRAM;
+                  end if;
+
                when PAKREAD_READSDRAM => 
                   state           <= PAKREAD_WRITEPIF;
                   sdram_request   <= '1';
@@ -573,14 +582,19 @@ begin
 
                when PAKWRITE_CHECKNEXT =>
                   if (sendcount = 0) then
+                     state          <= PAKWRITE_WAITWRITE;
+                  else
+                     state      <= WAITSLOW;
+                     stateNext  <= PAKWRITE_READPIF;
+                  end if;
+                  
+               when PAKWRITE_WAITWRITE =>
+                  if (slowNextByteEna = '1') then
                      state          <= WAITSLOW;
                      toPad_ready    <= '0';
                      stateNext      <= IDLE;
                      toPIF_data     <= pakcrc_value;
                      toPIF_ena      <= '1';
-                  else
-                     state      <= WAITSLOW;
-                     stateNext  <= PAKWRITE_READPIF;
                   end if;
             
 ----------------------------- error case of too much data requested -------------------------------

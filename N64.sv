@@ -184,7 +184,7 @@ assign BUTTONS   = 0;
 assign VGA_SCALER= 0;
 
 assign ADC_BUS  = 'Z;
-assign USER_OUT = '1;
+
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQMH, SDRAM_nWE, SDRAM_nCAS, SDRAM_nRAS, SDRAM_nCS} = 'Z;
@@ -295,6 +295,8 @@ parameter CONF_STR = {
    "P3O[15],Read Z,On,Off;",
    "P3O[1],Swap Interlaced,Off,On;",
    "P3O[49],Pad Speed,Normal,Fast;",
+   "P3O[90],SNAC,Off,On;",
+   "P3O[91],SNAC Compare,Off,On;",
    "-;",
    
 	"R0,Reset;",
@@ -698,7 +700,21 @@ n64top
    .pad_2_analog_v   (joystick_analog_l2[15:8]),
    .pad_3_analog_h   (joystick_analog_l3[7:0]),
    .pad_3_analog_v   (joystick_analog_l3[15:8]),
-   
+ 
+    // snac  
+   .PIFCOMPARE             (status[91]),
+   .snac                   (snac),
+   .command_startSNAC      (command_start),
+   .command_padindexSNAC   (command_padindex),
+   .command_sendCntSNAC    (command_sendCnt),
+   .command_receiveCntSNAC (command_receiveCnt),
+   .toPad_enaSNAC          (toPad_ena),
+   .toPad_dataSNAC         (toPad_data),
+   .toPad_readySNAC        (toPad_ready),
+   .toPIF_enaSNAC          (toPIF_ena),
+   .toPIF_timeoutSNAC      (toPIF_timeout),
+   .toPIF_dataSNAC         (toPIF_data),
+	
    // audio
    .sound_out_left   (AUDIO_L),
    .sound_out_right  (AUDIO_R),  
@@ -741,15 +757,71 @@ assign VGA_F1 = Interlaced ^ status[1];
 assign VGA_SL = 0;
 assign VGA_DISABLE = 0;
 
+////////////////////////////  SNAC  ///////////////////////////////////
+
+wire snac = status[90];
+wire dataIn;
+wire dataOut;
+wire command_start;
+wire [1:0]command_padindex;
+wire [5:0]command_sendCnt;
+wire [5:0]command_receiveCnt;
+wire toPad_ena;
+wire [7:0]toPad_data;
+wire toPad_ready;
+wire toPIF_timeout;
+wire toPIF_ena;
+wire [7:0]toPIF_data;
+
+//d-  io[1] pad1
+//d+  io[0] pad2
+//rx- io[5] pad3
+//rx+ io[4] pad4
+
+always @(posedge clk_1x) begin
+	if (snac) begin
+		case (command_padindex)
+			2'd0: begin//port1
+				USER_OUT[1] <= dataOut;
+				dataIn <= USER_IN[1];
+			end
+			2'd1: begin//port2
+				USER_OUT[0] <= dataOut;
+				dataIn <= USER_IN[0];
+			end
+			2'd2: begin//port3
+				USER_OUT[5] <= dataOut;
+				dataIn <= USER_IN[5];
+			end
+			2'd3: begin//port4
+				USER_OUT[4] <= dataOut;
+				dataIn <= USER_IN[4];
+			end
+		endcase
+		USER_OUT[2] <= 1'b1;
+		USER_OUT[3] <= 1'b1;
+		USER_OUT[6] <= 1'b1;
+	end else begin
+		USER_OUT <= '1;
+	end
+end
+
+N64_SNAC N64_SNAC_inst
+(
+	.reset(reset_or),
+	.clk_1x(clk_1x) ,	// input clk1x 62.5mhz
+	.output1(dataOut) ,
+	.input1(dataIn),
+	.start(command_start),
+	.dataOut(toPIF_data),
+	.cmdData(toPad_data),
+	.byteRec(toPIF_ena),
+	.ready(toPad_ready),
+	.toPad_ena(toPad_ena),
+	.timeout(toPIF_timeout),
+	.receiveCnt(command_receiveCnt),
+	.sendCnt(command_sendCnt)
+);
 
 endmodule
-
-      
-      
-
-  
-      
-       
-        
-        
         

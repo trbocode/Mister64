@@ -77,7 +77,7 @@ architecture arch of SI is
    signal state                  : tState := IDLE;
    
    signal nextDMAisRead          : std_logic := '0';
-   signal nextDMATime            : integer range 0 to 1152 := 0;
+   signal nextDMATime            : integer range 0 to 2047 := 0;
    signal pifIndex               : unsigned(5 downto 0) := (others => '0');
    signal dataLatch              : std_logic_vector(63 downto 0) := (others => '0');
    signal piframCheck            : unsigned(10 downto 0) := (others => '0');
@@ -154,13 +154,12 @@ begin
                      SI_PIF_ADDR_RD64B  <= unsigned(bus_dataWrite(31 downto 1)) & '0';
                      SI_STATUS_DMA_busy <= '1';
                      nextDMAisRead      <= '1';
-                     nextDMATime        <= 1152;
                      
                   when x"00010" => 
                      SI_PIF_ADDR_WR64B  <= unsigned(bus_dataWrite(31 downto 1)) & '0';
                      SI_STATUS_DMA_busy <= '1';
                      nextDMAisRead      <= '0';
-                     nextDMATime        <= 1152;
+                     nextDMATime        <= 2047;
                      
                   when x"00018" => SI_STATUS_IRQ     <= '0';
                   when others   => null;                  
@@ -200,6 +199,7 @@ begin
                   state         <= READ_WAIT1;
                   SIPIF_addr    <= pifIndex;
                   rdram_address <= (x"0" & SI_DRAM_ADDR(23 downto 0)) + (pifIndex(5 downto 3) & "000");
+                  nextDMATime   <= 2047;
                   
                when READ_WAIT1 =>
                   state <= READ_WAIT2;
