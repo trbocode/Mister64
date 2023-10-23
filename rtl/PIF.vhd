@@ -18,9 +18,9 @@ entity pif is
       ISPAL                : in  std_logic;
       CICTYPE              : in  std_logic_vector(3 downto 0);
       EEPROMTYPE           : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
-      PADCOUNT             : in  std_logic_vector(1 downto 0); -- count - 1
       
       error                : out std_logic := '0';
+      isIdle               : out std_logic := '0';
       
       command_start        : out std_logic := '0';
       command_padindex     : out unsigned(1 downto 0) := (others => '0');
@@ -225,6 +225,8 @@ architecture arch of pif is
    signal eeprom_addr_clear         : std_logic_vector(8 downto 0) := (others => '0');
    
 begin 
+
+   isIdle <= '1' when (state = IDLE) else '0';
 
    pifrom_addr <= ISPAL & std_logic_vector(bus_addr(10 downto 2));
 
@@ -626,12 +628,12 @@ begin
                      if (EXT_receive > 4) then
                         EXT_over         <= '1';
                      end if;
-                  elsif (ram_q_b = x"02" and EXT_channel <= unsigned(PADCOUNT)) then -- pad read
+                  elsif (ram_q_b = x"02") then -- pad read
                      state         <= EXTCOMM_SEND;
                      if (EXT_send /= x"03" or EXT_receive /= x"21") then
                         error <= '1';
                      end if;
-                  elsif (ram_q_b = x"03" and EXT_channel <= unsigned(PADCOUNT)) then -- pad write
+                  elsif (ram_q_b = x"03") then -- pad write
                      state         <= EXTCOMM_SEND;
                      if (EXT_send /= x"23" or EXT_receive /= x"01") then
                         error <= '1';

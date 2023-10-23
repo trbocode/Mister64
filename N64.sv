@@ -177,7 +177,7 @@ assign HDMI_FREEZE = 1'b0;
 assign AUDIO_S   = 1;
 assign AUDIO_MIX = status[8:7];
 
-assign LED_USER  = cart_download | bk_pending;
+assign LED_USER  = cartN64_download | cartGB_download | bk_pending;
 assign LED_DISK  = 0;
 assign LED_POWER = 0;
 assign BUTTONS   = 0;
@@ -218,7 +218,7 @@ pll2 pll2
 	.outclk_0(clk_vid)
 );
 
-wire reset_or = RESET | buttons[1] | status[0] | cart_download;
+wire reset_or = RESET | buttons[1] | status[0] | cartN64_download;
 
 ////////////////////////////  HPS I/O  //////////////////////////////////
 
@@ -232,6 +232,7 @@ wire reset_or = RESET | buttons[1] | status[0] | cart_download;
 parameter CONF_STR = {
 	"N64;SS3C000000:1000000;",
    "FS1,N64z64n64v64,Load;",
+   "F2,GBCGB ,Load GB-Transfer;",
    "-;",
 	"D0R[40],Reload Backup RAM;",
 	"D0R[41],Save Backup RAM;",
@@ -243,12 +244,11 @@ parameter CONF_STR = {
 	//"RH,Save state (Alt-F1);",
 	//"RI,Restore state (F1);",
 	"-;",
-   "O[59:58],Gamepads,1,2,3,4;",
-   "O[51:50],Pad 1 Pak,None,CPAK,Rumble;",
-   "O[53:52],Pad 2 Pak,None,CPAK,Rumble;",
-   "O[55:54],Pad 3 Pak,None,CPAK,Rumble;",
-   "O[57:56],Pad 4 Pak,None,CPAK,Rumble;",
-   "O[60],Swap Analog<->DPAD,Off,On;",
+   "O[51:49],Pad 1 Type,N64Pad,None,ControllerPak,RumblePak,SNAC,TransferPak;",
+   "O[54:52],Pad 2 Type,N64Pad,None,ControllerPak,RumblePak,SNAC;",
+   "O[57:55],Pad 3 Type,N64Pad,None,ControllerPak,RumblePak,SNAC;",
+   "O[60:58],Pad 4 Type,N64Pad,None,ControllerPak,RumblePak,SNAC;",
+   "O[92],Swap Analog<->DPAD,Off,On;",
    "O[62:61],Dual Controller,Off,P1->P2,P1->P3;",
    "O[63],Analog Stick Swap,Off,On;",
 	"-;",
@@ -294,7 +294,6 @@ parameter CONF_STR = {
    "P3O[14],Write Z,On,Off;",
    "P3O[15],Read Z,On,Off;",
    "P3O[1],Swap Interlaced,Off,On;",
-   "P3O[49],Pad Speed,Normal,Fast;",
    "P3O[90],SNAC,Off,On;",
    "P3O[91],SNAC Compare,Off,On;",
    "-;",
@@ -458,22 +457,37 @@ reg [26:0] ramdownload_wraddr;
 reg [31:0] ramdownload_wrdata;
 reg        ramdownload_wr;
 wire       ramdownload_ready;
-reg        cart_download;
+reg        cartN64_download;
+reg        cartGB_download;
 reg        cart_loaded = 0;
 
-localparam CART_START = 8388608;
+localparam CARTN64_START = 16777216;
+localparam CARTGB_START  = 8388608;
 
 always @(posedge clk_1x) begin
 
-   cart_download     <= ioctl_download & (ioctl_index[5:0] == 1);
+   cartN64_download     <= ioctl_download & (ioctl_index[5:0] == 1);
+   cartGB_download      <= ioctl_download & (ioctl_index[5:0] == 2);
 
 	ramdownload_wr <= 0;
-	if(cart_download) begin
+	if(cartN64_download) begin
       cart_loaded <= 1;
       if (ioctl_wr) begin
          if(~ioctl_addr[1]) begin
             ramdownload_wrdata[15:0] <= ioctl_dout;
-            ramdownload_wraddr <= ioctl_addr[26:0] + CART_START[26:0];                                  
+            ramdownload_wraddr       <= ioctl_addr[26:0] + CARTN64_START[26:0];                                  
+         end else begin
+            ramdownload_wrdata[31:16] <= ioctl_dout;
+            ramdownload_wr            <= 1;
+            ioctl_wait                <= 1;
+         end
+      end
+      if(ramdownload_ready) ioctl_wait <= 0;
+   end else if(cartGB_download) begin
+      if (ioctl_wr) begin
+         if(~ioctl_addr[1]) begin
+            ramdownload_wrdata[15:0] <= ioctl_dout;
+            ramdownload_wraddr       <= ioctl_addr[26:0] + CARTGB_START[26:0];                                  
          end else begin
             ramdownload_wrdata[31:16] <= ioctl_dout;
             ramdownload_wr            <= 1;
@@ -562,7 +576,7 @@ defparam savestate_ui.INFO_TIMEOUT_BITS = 25;
 
 wire  bk_pending;
 
-wire bk_load     = status[40] | (cart_download & img_mounted);
+wire bk_load     = status[40] | (cartN64_download & img_mounted);
 wire bk_save     = status[41] | (OSD_STATUS & ~OSD_STATUS_1 & ~status[42]);
 
 reg use_img;
@@ -573,8 +587,8 @@ always @(posedge clk_1x) begin
    
    OSD_STATUS_1 <= OSD_STATUS;
 
-	old_downloading <= cart_download;
-	if(~old_downloading & cart_download) use_img <= 0;
+	old_downloading <= cartN64_download;
+	if(~old_downloading & cartN64_download) use_img <= 0;
 
 	if(img_mounted && img_size && !img_readonly) begin
 		use_img <= 1;
@@ -670,13 +684,12 @@ n64top
    .sdram_dataRead    (sdram_dataRead    ),
       
    // pad
-   .PADCOUNT         (status[59:58]),
-   .PADTYPE0         (status[51:50]),
-   .PADTYPE1         (status[53:52]),
-   .PADTYPE2         (status[55:54]),
-   .PADTYPE3         (status[57:56]),
-   .PADDPADSWAP      (status[60]),
-   .PADSLOW          (~status[49]),
+   .PADTYPE0         (status[51:49]),
+   .PADTYPE1         (status[54:52]),
+   .PADTYPE2         (status[57:55]),
+   .PADTYPE3         (status[60:58]),
+   .PADDPADSWAP      (status[92]),
+   .PADSLOW          (1'b1),
    .rumble           (rumble),
    .pad_A            ({joy4[ 4],joy3[ 4],joy2[ 4],joy[ 4]}),
    .pad_B            ({joy4[ 5],joy3[ 5],joy2[ 5],joy[ 5]}),
@@ -724,6 +737,7 @@ n64top
    .EEPROMTYPE       (eepromtype),
    .CONTROLLERPAK    (status[71]),
    .CPAKFORMAT       (status[81]),
+   .TRANSFERPAK      (status[73]),
    
    .save             (bk_save),
    .load             (bk_load),
@@ -759,7 +773,7 @@ assign VGA_DISABLE = 0;
 
 ////////////////////////////  SNAC  ///////////////////////////////////
 
-wire snac = status[90];
+wire snac;
 wire dataIn;
 wire dataOut;
 wire command_start;
