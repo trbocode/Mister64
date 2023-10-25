@@ -743,6 +743,11 @@ begin
             tex_color_out(2) <= tex_color_select(2);
             tex_alpha_out    <= tex_alpha_select;
             
+            tex2_color_out(0) <= tex_color_out(0);
+            tex2_color_out(1) <= tex_color_out(1);
+            tex2_color_out(2) <= tex_color_out(2);
+            tex2_alpha_out    <= tex_alpha_out;   
+            
             -- synthesis translate_off
             export_TexFt_addr <= exportNext_TexFt_addr; 
             export_TexFt_data <= exportNext_TexFt_data; 
@@ -755,10 +760,15 @@ begin
          
          if (step2 = '1') then
          
-            tex2_color_out(0) <= tex_color_select(0);
-            tex2_color_out(1) <= tex_color_select(1);
-            tex2_color_out(2) <= tex_color_select(2);
-            tex2_alpha_out    <= tex_alpha_select;
+            tex_color_out(0) <= tex_color_select(0);
+            tex_color_out(1) <= tex_color_select(1);
+            tex_color_out(2) <= tex_color_select(2);
+            tex_alpha_out    <= tex_alpha_select;
+         
+            tex2_color_out(0) <= tex_color_out(0);
+            tex2_color_out(1) <= tex_color_out(1);
+            tex2_color_out(2) <= tex_color_out(2);
+            tex2_alpha_out    <= tex_alpha_out;   
             
             -- synthesis translate_off
             export2_TexFt_addr <= exportNext_TexFt_addr; 

@@ -286,7 +286,7 @@ begin
                if (command_start = '1') then
                   state       <= WAITSLOW;
                   toPad_ready <= '0';
-                  if (PADTYPE = "001") then
+                  if (PADTYPE = "001" and command_sendCnt = 1) then
                      toPIF_timeout <= '1';
                      stateNext     <= IDLE;
                   else
