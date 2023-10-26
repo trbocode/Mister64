@@ -77,6 +77,7 @@ begin
       variable isVsync                   : std_logic;
       variable vposNew                   : integer range 0 to 511;
       variable interlacedDisplayFieldNew : std_logic;
+      variable vsync_hstart : integer range 0 to 4095;
    begin
       if rising_edge(clk1x) then
              
@@ -103,6 +104,7 @@ begin
 
          if (reset = '1') then
                
+
             --videoout_reports.irq_VBLANK  <= '0';
                
             --videoout_reports.interlacedDisplayField   <= videoout_ss_in.interlacedDisplayField;
@@ -123,12 +125,20 @@ begin
             if (videoout_settings.isPAL = '1') then
                --htotal <= (62500000 / 50 / 312); -- overwritten below
                htotal <= 4010;
-               vtotal <= 312;
+	       if  (videoout_settings.CTRL_SERRATE ='1' and videoout_reports.interlacedDisplayField='1') then
+	       		vtotal <= 313;
+       	       else
+	       		vtotal <= 312;
+		end if;
                --videoout_out.isPal <= '1';
             else
                --htotal <= (62500000 / 60 / 262); -- overwritten below
                htotal <= 3970;
+	       if  (videoout_settings.CTRL_SERRATE ='1' and videoout_reports.interlacedDisplayField='1') then
+               vtotal <= 263;
+       	       else
                vtotal <= 262;
+       	       end if;
                --videoout_out.isPal <= '0';
             end if;
             
@@ -141,7 +151,22 @@ begin
             else
                vDisplayEnd <= 10 + to_integer(videoout_settings.videoSizeY(9 downto 1));
             end if;
-              
+
+	    vsync_hstart:=1;
+
+	    if  (videoout_settings.CTRL_SERRATE ='1') then
+		    if (videoout_reports.interlacedDisplayField='0') then
+		    	vsync_hstart:=htotal/2;
+	    	    end if;
+	    end if;
+	    if (nextHCount=vsync_hstart) then
+		    isVsync:='0';
+        	    vsyncCount<=0;
+		    if (vpos<vDisplayStart or vpos>=vDisplayEnd) then
+		       	isVsync:='1';
+		       	vsyncCount<= vsyncCount + 1;
+		    end if;
+	    end if;
             -- gpu timing count
             if (nextHCount > 1) then
                nextHCount <= nextHCount - 1;
@@ -151,27 +176,21 @@ begin
                     videoout_reports.newFrame <= '1'; 
                   end if;
                end if;
-            else
-               
-               nextHCount <= htotal;
-               
+
+	else
+
+	       nextHCount <= htotal;
                vposNew := vpos + 1;
                if (vposNew >= vtotal) then
                   vposNew := 0;
                end if;
                
                vpos <= vposNew;
-               
-               isVsync := '0';
-               vsyncCount <= 0;
-               if (vposNew < vDisplayStart or vposNew >= vDisplayEnd) then 
-                  isVsync := '1'; 
-                  vsyncCount <= vsyncCount + 1;
-               else
+               	       
+               if (vposNew >= vDisplayStart and vposNew < vDisplayEnd) then 
                   lineIn    <= to_unsigned(vposNew - vDisplayStart, 9);
                   lineInNew <= '1';
                end if;
-
                interlacedDisplayFieldNew := videoout_reports.interlacedDisplayField;
                if (isVsync /= videoout_reports.inVsync) then
                   if (isVsync = '1') then
