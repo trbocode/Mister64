@@ -331,12 +331,14 @@ begin
       elsif (select3next(1 downto 0) = "11") then tex_addr(3) <= std_logic_vector(addr_calcR3(11 downto 4)); tex_addr(7) <= std_logic_vector(addr_calcR3(11 downto 4));
       else tex_addr(3) <= (others => '0'); tex_addr(7) <= (others => '0'); end if;
    
-      if (settings_otherModes.enTlut = '1') then
+      if (settings_otherModes.enTlut = '1' or settings_tile.Tile_size = SIZE_32BIT) then
          select0next(2) <= '0';
          select1next(2) <= '0';
          select2next(2) <= '0';
          select3next(2) <= '0';
+      end if;
       
+      if (settings_otherModes.enTlut = '1') then
          case (settings_tile_1.Tile_size) is
             when SIZE_4BIT =>
                tex_addr(4) <= std_logic_vector(settings_tile_1.Tile_palette) & std_logic_vector(tex4_0);
