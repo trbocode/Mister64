@@ -110,7 +110,7 @@ begin
 			if (counter == 1) begin
 				output1 <= 1'b1;
 				state <= 3'd6;
-				counter <= 8'd10; //short wait to make sure input is high
+				counter <= 8'd20; //short wait to make sure input is high
 			end	
 		end
 
