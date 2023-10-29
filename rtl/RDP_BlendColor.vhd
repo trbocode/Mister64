@@ -19,13 +19,15 @@ entity RDP_BlendColor is
      
       blend_ena               : in  std_logic;
       zOverflow               : in  std_logic;
-      pipeInColor             : in  tcolor4_s16;
+      pipeInColor             : in  tcolor4_u9;
       combine_color           : in  tcolor3_u8;
       combine_alpha           : in  unsigned(7 downto 0);
       combine_alpha2          : in  unsigned(7 downto 0);
       FB_color                : in  tcolor4_u8;
-      blend_shift_a           : in unsigned(2 downto 0);
-      blend_shift_b           : in unsigned(2 downto 0);
+      blend_shift_a           : in  unsigned(2 downto 0);
+      blend_shift_b           : in  unsigned(2 downto 0);
+      random8                 : in  unsigned(7 downto 0);
+      ditherAlpha             : in  unsigned(2 downto 0);
       
       blend_alphaIgnore       : out std_logic := '0';
       blend_divEna            : out std_logic := '0';
@@ -136,11 +138,10 @@ begin
          when 1 =>
             color_1_A <= settings_fogcolor.fog_A;
          when 2 => 
-            -- todo: should add ditherAlpha
-            if (pipeInColor(3)(8) = '1') then
+            if (pipeInColor(3) + ditherAlpha >= 16#100#) then
                color_1_A <= (others => '1');
             else
-               color_1_A <= unsigned(pipeInColor(3)(7 downto 0));
+               color_1_A <= unsigned(pipeInColor(3)(7 downto 0) + to_integer(ditherAlpha));
             end if;
          when 3 => color_1_A <= (others => '0'); -- zero
          when others => null;
@@ -213,7 +214,9 @@ begin
                      blend_alphaIgnore <= '1';
                   end if;
                else
-                  -- todo: dither alpha
+                  if (combine_alpha < random8) then
+                     blend_alphaIgnore <= '1';
+                  end if;
                end if;
             end if;
             

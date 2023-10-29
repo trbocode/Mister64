@@ -22,6 +22,8 @@ entity RDP is
       error_drawMode       : out std_logic; 
       error_RDPMEMMUX      : out std_logic; 
       
+      CICTYPE              : in  std_logic_vector(3 downto 0);
+      
       DISABLEFILTER        : in  std_logic;
       DISABLEDITHER        : in  std_logic;
       write9               : in  std_logic;
@@ -284,9 +286,9 @@ architecture arch of RDP is
    signal pipeIn_cvgValue           : unsigned(7 downto 0);
    signal pipeIn_offX               : unsigned(1 downto 0);
    signal pipeIn_offY               : unsigned(1 downto 0);
-   signal pipeInColor               : tcolor4_s16;
    signal pipeIn_S                  : signed(15 downto 0);
    signal pipeIn_T                  : signed(15 downto 0);
+   signal pipeInColorFull           : tcolor4_s32;
    signal pipeInWCarry              : std_logic;
    signal pipeInWShift              : integer range 0 to 14;
    signal pipeInWNormLow            : unsigned(7 downto 0);
@@ -367,6 +369,7 @@ architecture arch of RDP is
    signal export_pipeDone           : std_logic;       
    signal export_pipeO              : rdp_export_type;
    signal export_Color              : rdp_export_type;
+   signal export_RGBA               : rdp_export_type;
    signal export_LOD                : rdp_export_type;
    signal export_TexCoord           : rdp_export_type;
    signal export_TexFetch0          : rdp_export_type;
@@ -395,7 +398,6 @@ architecture arch of RDP is
    signal export_copyBytes          : rdp_export_type;
    
    signal pipeIn_cvg16              : unsigned(15 downto 0);
-   signal pipeInColorFull           : tcolor4_s32;
    signal pipeInSTWZ                : tcolor4_s32;
    -- synthesis translate_on   
 
@@ -468,6 +470,11 @@ begin
                   DPC_STATUS_start_gclk <= '0';
                end if;
    
+               -- some games like NBA JAM just need the clock timer ticking up and some games like OOT depend on them being either zero or very accurate
+               -- as timing is not yet accurate enough, only activate it outside of CIC 6105 here
+               if (CICTYPE(2) = '0') then
+                  DPC_CLOCK <= DPC_CLOCK + 1;
+               end if;
    
                -- bus read
                if (bus_read = '1') then
@@ -1000,7 +1007,7 @@ begin
       pipeIn_cvgValue         => pipeIn_cvgValue, 
       pipeIn_offX             => pipeIn_offX, 
       pipeIn_offY             => pipeIn_offY, 
-      pipeInColor             => pipeInColor, 
+      pipeInColorFull         => pipeInColorFull,
       pipeIn_S                => pipeIn_S,
       pipeIn_T                => pipeIn_T,
       pipeInWCarry            => pipeInWCarry,   
@@ -1014,7 +1021,6 @@ begin
 
       -- synthesis translate_off
       pipeIn_cvg16            => pipeIn_cvg16, 
-      pipeInColorFull         => pipeInColorFull,
       pipeInSTWZ              => pipeInSTWZ,
       -- synthesis translate_on
 
@@ -1218,7 +1224,7 @@ begin
       pipeIn_cvgValue         => pipeIn_cvgValue,  
       pipeIn_offX             => pipeIn_offX,  
       pipeIn_offY             => pipeIn_offY,  
-      pipeInColor             => pipeInColor,     
+      pipeInColorFull         => pipeInColorFull,
       pipeIn_S                => pipeIn_S,
       pipeIn_T                => pipeIn_T,    
       pipeInWCarry            => pipeInWCarry,   
@@ -1248,12 +1254,12 @@ begin
      
       -- synthesis translate_off
       pipeIn_cvg16            => pipeIn_cvg16,  
-      pipeInColorFull         => pipeInColorFull,
       pipeInSTWZ              => pipeInSTWZ,
       
       export_pipeDone         => export_pipeDone,
       export_pipeO            => export_pipeO,   
       export_Color            => export_Color,   
+      export_RGBA             => export_RGBA,   
       export_LOD              => export_LOD,   
       export_TexCoord         => export_TexCoord,   
       export_TexFetch0        => export_TexFetch0,   
@@ -1670,6 +1676,7 @@ begin
             
                export_gpu32( 3, tracecounts_out( 3), export_pipeO,    outfile); tracecounts_out( 3) <= tracecounts_out( 3) + 1;
                export_gpu32( 4, tracecounts_out( 4), export_color,    outfile); tracecounts_out( 4) <= tracecounts_out( 4) + 1;
+               export_gpu32(25, tracecounts_out(25), export_RGBA,     outfile); tracecounts_out(25) <= tracecounts_out(25) + 1;
                
                texfetch_count := tracecounts_out(7);
                texcolor_count := tracecounts_out(13);
@@ -1677,31 +1684,31 @@ begin
                if (useTexture = '1') then
                   export_gpu32(19, tracecounts_out(19), export_LOD,      outfile); tracecounts_out(19) <= tracecounts_out(19) + 1;
                   export_gpu32(11, tracecounts_out(11), export_TexCoord, outfile); tracecounts_out(11) <= tracecounts_out(11) + 1;
-                  if (settings_otherModes.sampleType = '1' or settings_otherModes.enTlut = '1') then
-                     export_gpu32(7, texfetch_count + 0, export_TexFetch0, outfile);
-                     export_gpu32(7, texfetch_count + 1, export_TexFetch1, outfile);
-                     export_gpu32(7, texfetch_count + 2, export_TexFetch2, outfile);
-                     export_gpu32(7, texfetch_count + 3, export_TexFetch3, outfile);
-                     texfetch_count := texfetch_count + 4;
-                  else
-                     export_gpu32(7, texfetch_count, export_TexFetch0, outfile);
-                     texfetch_count := texfetch_count + 1;
-                  end if;
-                  
-                  if (export_texmode = TEXMODE_UNFILTERED) then                 
-                     export_gpu32(13, texcolor_count, export_TexColor0, outfile); 
-                     texcolor_count := texcolor_count + 1;
-                  elsif (export_texmode = TEXMODE_UPPER) then 
-                     export_gpu32(13, texcolor_count + 0, export_TexColor1, outfile);
-                     export_gpu32(13, texcolor_count + 1, export_TexColor2, outfile);
-                     export_gpu32(13, texcolor_count + 2, export_TexColor3, outfile);
-                     texcolor_count := texcolor_count + 3;
-                  elsif (export_texmode = TEXMODE_LOWER) then 
-                     export_gpu32(13, texcolor_count + 0, export_TexColor1, outfile);
-                     export_gpu32(13, texcolor_count + 1, export_TexColor2, outfile);
-                     export_gpu32(13, texcolor_count + 2, export_TexColor0, outfile);
-                     texcolor_count := texcolor_count + 3;
-                  end if;
+                  --if (settings_otherModes.sampleType = '1' or settings_otherModes.enTlut = '1') then
+                  --   export_gpu32(7, texfetch_count + 0, export_TexFetch0, outfile);
+                  --   export_gpu32(7, texfetch_count + 1, export_TexFetch1, outfile);
+                  --   export_gpu32(7, texfetch_count + 2, export_TexFetch2, outfile);
+                  --   export_gpu32(7, texfetch_count + 3, export_TexFetch3, outfile);
+                  --   texfetch_count := texfetch_count + 4;
+                  --else
+                  --   export_gpu32(7, texfetch_count, export_TexFetch0, outfile);
+                  --   texfetch_count := texfetch_count + 1;
+                  --end if;
+                  --
+                  --if (export_texmode = TEXMODE_UNFILTERED) then                 
+                  --   export_gpu32(13, texcolor_count, export_TexColor0, outfile); 
+                  --   texcolor_count := texcolor_count + 1;
+                  --elsif (export_texmode = TEXMODE_UPPER) then 
+                  --   export_gpu32(13, texcolor_count + 0, export_TexColor1, outfile);
+                  --   export_gpu32(13, texcolor_count + 1, export_TexColor2, outfile);
+                  --   export_gpu32(13, texcolor_count + 2, export_TexColor3, outfile);
+                  --   texcolor_count := texcolor_count + 3;
+                  --elsif (export_texmode = TEXMODE_LOWER) then 
+                  --   export_gpu32(13, texcolor_count + 0, export_TexColor1, outfile);
+                  --   export_gpu32(13, texcolor_count + 1, export_TexColor2, outfile);
+                  --   export_gpu32(13, texcolor_count + 2, export_TexColor0, outfile);
+                  --   texcolor_count := texcolor_count + 3;
+                  --end if;
                end if;
                
                useTexture2 := '0';
@@ -1724,31 +1731,31 @@ begin
                case (to_integer(settings_combineMode.combine_add_A_0))   is  when 2 => useTexture2 := '1'; when others => null;  end case;
                
                if (useTexture2 = '1') then
-                  if (settings_otherModes.sampleType = '1' or settings_otherModes.enTlut = '1') then
-                     export_gpu32(7, texfetch_count + 0, export2_TexFetch0, outfile);
-                     export_gpu32(7, texfetch_count + 1, export2_TexFetch1, outfile);
-                     export_gpu32(7, texfetch_count + 2, export2_TexFetch2, outfile);
-                     export_gpu32(7, texfetch_count + 3, export2_TexFetch3, outfile);
-                     texfetch_count := texfetch_count + 4;
-                  else
-                     export_gpu32(7, texfetch_count, export2_TexFetch0, outfile);
-                     texfetch_count := texfetch_count + 1;
-                  end if;
-                  
-                  if (export2_texmode = TEXMODE_UNFILTERED) then                 
-                     export_gpu32(13, texcolor_count, export2_TexColor0, outfile); 
-                     texcolor_count := texcolor_count + 1;
-                  elsif (export2_texmode = TEXMODE_UPPER) then 
-                     export_gpu32(13, texcolor_count + 0, export2_TexColor1, outfile);
-                     export_gpu32(13, texcolor_count + 1, export2_TexColor2, outfile);
-                     export_gpu32(13, texcolor_count + 2, export2_TexColor3, outfile);
-                     texcolor_count := texcolor_count + 3;
-                  elsif (export2_texmode = TEXMODE_LOWER) then 
-                     export_gpu32(13, texcolor_count + 0, export2_TexColor1, outfile);
-                     export_gpu32(13, texcolor_count + 1, export2_TexColor2, outfile);
-                     export_gpu32(13, texcolor_count + 2, export2_TexColor0, outfile);
-                     texcolor_count := texcolor_count + 3;
-                  end if;
+                  --if (settings_otherModes.sampleType = '1' or settings_otherModes.enTlut = '1') then
+                  --   export_gpu32(7, texfetch_count + 0, export2_TexFetch0, outfile);
+                  --   export_gpu32(7, texfetch_count + 1, export2_TexFetch1, outfile);
+                  --   export_gpu32(7, texfetch_count + 2, export2_TexFetch2, outfile);
+                  --   export_gpu32(7, texfetch_count + 3, export2_TexFetch3, outfile);
+                  --   texfetch_count := texfetch_count + 4;
+                  --else
+                  --   export_gpu32(7, texfetch_count, export2_TexFetch0, outfile);
+                  --   texfetch_count := texfetch_count + 1;
+                  --end if;
+                  --
+                  --if (export2_texmode = TEXMODE_UNFILTERED) then                 
+                  --   export_gpu32(13, texcolor_count, export2_TexColor0, outfile); 
+                  --   texcolor_count := texcolor_count + 1;
+                  --elsif (export2_texmode = TEXMODE_UPPER) then 
+                  --   export_gpu32(13, texcolor_count + 0, export2_TexColor1, outfile);
+                  --   export_gpu32(13, texcolor_count + 1, export2_TexColor2, outfile);
+                  --   export_gpu32(13, texcolor_count + 2, export2_TexColor3, outfile);
+                  --   texcolor_count := texcolor_count + 3;
+                  --elsif (export2_texmode = TEXMODE_LOWER) then 
+                  --   export_gpu32(13, texcolor_count + 0, export2_TexColor1, outfile);
+                  --   export_gpu32(13, texcolor_count + 1, export2_TexColor2, outfile);
+                  --   export_gpu32(13, texcolor_count + 2, export2_TexColor0, outfile);
+                  --   texcolor_count := texcolor_count + 3;
+                  --end if;
                end if;
                
                tracecounts_out(7)  <= texfetch_count;
@@ -1787,7 +1794,7 @@ begin
                write(line_out, string'(" D2 "));
                write(line_out, to_hstring(to_unsigned(0, 32)));
                write(line_out, string'(" D3 "));
-               write(line_out, to_hstring(to_unsigned(0, 32)));
+               write(line_out, to_hstring(resize(writePixelData32(31 downto 8), 32)));
                writeline(outfile, line_out);
                tracecounts_out(1) <= tracecounts_out(1) + 1;
             end if;

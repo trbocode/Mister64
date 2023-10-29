@@ -504,7 +504,7 @@ begin
                         SP_DMA_CURRENT_FETCHLEN <= to_integer(SP_DMA_CURRENT_WORKLEN(3 downto 0));
                      end if;
                      
-                  elsif (RSP2RDP_req_latched = '1') then
+                  elsif (RSP2RDP_req_latched = '1' and SP_STATUS_dmabusy = '0') then
                      RSP2RDP_req_latched     <= '0';
                      MEMSTATE                <= MEM_STARTDMA_RDP;
                      mem_address_a           <= std_logic_vector(RSP2RDP_rdaddr(11 downto 3));

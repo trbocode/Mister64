@@ -12,6 +12,7 @@ entity sdram_model is
       INITFILE          : string := "NONE";
       SCRIPTLOADING     : std_logic := '0';
       FILELOADING       : std_logic := '0';
+      FILEOFFSET        : integer := 0;
       LOADRDRAM         : std_logic := '0';
       READDELAY         : integer   := 0   -- 6 for match with HW
    );
@@ -190,7 +191,7 @@ begin
          if (initFromFile = '1') then
             initFromFile <= '0';
             file_open(f_status, infile, INITFILE, read_mode);
-            targetpos := 0;
+            targetpos := FILEOFFSET;
             while (not endfile(infile)) loop
                read(infile, next_vector, actual_len);  
                read_byte := CONV_STD_LOGIC_VECTOR(bit'pos(next_vector(0)), 8);

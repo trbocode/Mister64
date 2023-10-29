@@ -168,13 +168,12 @@ begin
       sdram_dataRead        => sdram_dataRead, 
       
       -- pad
-      PADCOUNT              => "11",
-      PADTYPE0              => "01",
-      PADTYPE1              => "00",
-      PADTYPE2              => "00",
-      PADTYPE3              => "00",
+      PADTYPE0              => "001",
+      PADTYPE1              => "000",
+      PADTYPE2              => "000",
+      PADTYPE3              => "000",
       PADDPADSWAP           => '0',
-      PADSLOW               => '0',
+      PADSLOW               => '1',
       pad_A                 => "0000",
       pad_B                 => "0000",
       pad_Z                 => "0000",
@@ -198,11 +197,19 @@ begin
       pad_3_analog_h        => x"00",
       pad_3_analog_v        => x"00", 
       
+      --snac
+      PIFCOMPARE            => '0',
+      toPad_readySNAC       => '0',
+      toPIF_timeoutSNAC     => '0',
+      toPIF_enaSNAC         => '0',
+      toPIF_dataSNAC        => x"00",
+      
       -- saves              
       SAVETYPE              => "011",
       EEPROMTYPE            => "01",
       CONTROLLERPAK         => '1',
       CPAKFORMAT            => '0',
+      TRANSFERPAK           => '0',
       
       save                  => '0', 
       load                  => '0', 

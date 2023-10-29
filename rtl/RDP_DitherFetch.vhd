@@ -10,10 +10,13 @@ entity RDP_DitherFetch is
       clk1x                : in  std_logic;
       trigger              : in  std_logic;
       
+      DISABLEDITHER        : in  std_logic;
       settings_otherModes  : in  tsettings_otherModes;
       
       X_in                 : in  unsigned(11 downto 0);
       Y_in                 : in  unsigned(11 downto 0);
+      random3              : in  unsigned(2 downto 0);
+      random2              : in  unsigned(1 downto 0);
       
       ditherColor          : out unsigned(2 downto 0) := (others => '0');
       ditherAlpha          : out unsigned(2 downto 0) := (others => '0')
@@ -79,7 +82,7 @@ begin
             case (settings_otherModes.rgbDitherSel) is
                when "00" => ditherColor <= dither_selected;
                when "01" => ditherColor <= dither_selected;
-               when "10" => ditherColor <= "000"; -- todo: random for each color
+               when "10" => ditherColor <= random3;
                when "11" => ditherColor <= "111";
                when others => null;
             end case;
@@ -87,12 +90,15 @@ begin
             case (settings_otherModes.alphaDitherSel) is
                when "00" => ditherAlpha <= dither_selected;
                when "01" => ditherAlpha <= not dither_selected;
-               when "10" => ditherAlpha <= "000"; -- todo: random
+               when "10" => ditherAlpha <= random2 & '1';
                when "11" => ditherAlpha <= "000";
                when others => null;
             end case;
             
-            ditherAlpha <= (others => '0'); -- todo: hack until implemented
+            if (DISABLEDITHER = '1') then
+               ditherColor <= "000";
+               ditherAlpha <= "000";
+            end if;
          
          end if;
          

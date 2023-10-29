@@ -83,11 +83,10 @@ entity n64top is
       sdram_dataRead          : in  std_logic_vector(31 downto 0);
       
       -- PAD
-      PADCOUNT                : in  std_logic_vector(1 downto 0); -- count - 1
-      PADTYPE0                : in  std_logic_vector(1 downto 0); -- 00 = nothing, 01 = transfer, 10 = rumble
-      PADTYPE1                : in  std_logic_vector(1 downto 0);
-      PADTYPE2                : in  std_logic_vector(1 downto 0);
-      PADTYPE3                : in  std_logic_vector(1 downto 0);
+      PADTYPE0                : in  std_logic_vector(2 downto 0); -- 000 = normal, 001 = empty, 010 = cpak, 011 = rumble, 100 = snac, 101 = transfer pak
+      PADTYPE1                : in  std_logic_vector(2 downto 0);
+      PADTYPE2                : in  std_logic_vector(2 downto 0);
+      PADTYPE3                : in  std_logic_vector(2 downto 0);
       PADDPADSWAP             : in  std_logic;
       PADSLOW                 : in  std_logic;
       rumble                  : out std_logic_vector(3 downto 0);
@@ -113,7 +112,21 @@ entity n64top is
       pad_2_analog_v          : in  std_logic_vector(7 downto 0);      
       pad_3_analog_h          : in  std_logic_vector(7 downto 0);
       pad_3_analog_v          : in  std_logic_vector(7 downto 0);
-      
+
+      --snac
+      PIFCOMPARE              : in  std_logic;
+      snac                    : out std_logic;
+      command_startSNAC       : out std_logic := '0';
+      command_padindexSNAC    : out unsigned(1 downto 0) := (others => '0');
+      command_sendCntSNAC     : out unsigned(5 downto 0) := (others => '0');
+      command_receiveCntSNAC  : out unsigned(5 downto 0) := (others => '0');
+      toPad_enaSNAC           : out std_logic := '0';
+      toPad_dataSNAC          : out std_logic_vector(7 downto 0) := (others => '0');
+      toPad_readySNAC         : in  std_logic;
+      toPIF_timeoutSNAC       : in  std_logic;
+      toPIF_enaSNAC           : in  std_logic;
+      toPIF_dataSNAC          : in  std_logic_vector(7 downto 0);
+     
       -- audio
       sound_out_left          : out std_logic_vector(15 downto 0);
       sound_out_right         : out std_logic_vector(15 downto 0);
@@ -123,6 +136,7 @@ entity n64top is
       EEPROMTYPE              : in  std_logic_vector(1 downto 0); -- 00 -> off, 01 -> 4kbit, 10 -> 16kbit
       CONTROLLERPAK           : in  std_logic;
       CPAKFORMAT              : in  std_logic;
+      TRANSFERPAK             : in  std_logic;
       
       save                    : in  std_logic;
       load                    : in  std_logic;
@@ -345,6 +359,13 @@ architecture arch of n64top is
    signal bus_PIF_done           : std_logic;
    
    -- exchange of PIF and controller module
+   signal pif_idle               : std_logic;
+   signal PADTYPE_latched        : std_logic_vector(2 downto 0);
+   signal PADTYPE_latched0       : std_logic_vector(2 downto 0);
+   signal PADTYPE_latched1       : std_logic_vector(2 downto 0);
+   signal PADTYPE_latched2       : std_logic_vector(2 downto 0);
+   signal PADTYPE_latched3       : std_logic_vector(2 downto 0);
+   
    signal command_start          : std_logic;
    signal command_padindex       : unsigned(1 downto 0);
    signal command_sendCnt        : unsigned(5 downto 0);
@@ -355,6 +376,17 @@ architecture arch of n64top is
    signal toPIF_timeout          : std_logic;   
    signal toPIF_ena              : std_logic;   
    signal toPIF_data             : std_logic_vector(7 downto 0);
+
+   signal command_startUSB        : std_logic;
+   signal command_padindexUSB     : unsigned(1 downto 0);
+   signal command_sendCntUSB      : unsigned(5 downto 0);
+   signal command_receiveCntUSB   : unsigned(5 downto 0);
+   signal toPad_enaUSB            : std_logic;   
+   signal toPad_dataUSB           : std_logic_vector(7 downto 0);     
+   signal toPad_readyUSB          : std_logic;
+   signal toPIF_timeoutUSB        : std_logic;          
+   signal toPIF_enaUSB            : std_logic;   
+   signal toPIF_dataUSB           : std_logic_vector(7 downto 0);  
    
    -- SI/PIF
    signal SIPIF_ramreq           : std_logic;
@@ -421,6 +453,7 @@ architecture arch of n64top is
    signal change_sram            : std_logic;
    signal change_flash           : std_logic;
    signal cpak_change            : std_logic;
+   signal tpak_change            : std_logic;
    signal any_change             : std_logic;
    
    -- synthesis translate_off
@@ -595,6 +628,8 @@ begin
       error_texMode        => errorRDP_texMode,
       error_drawMode       => errorRDP_drawMode,
       error_RDPMEMMUX      => error_RDPMEMMUX,
+      
+      CICTYPE              => CICTYPE,
       
       DISABLEFILTER        => DISABLEFILTER,
       DISABLEDITHER        => DISABLEDITHER,
@@ -940,6 +975,47 @@ begin
       SS_DataRead          => SS_DataRead_PI
    );
    
+   process(clk1x)
+   begin
+      if rising_edge(clk1x) then
+         if (pif_idle = '1') then
+            PADTYPE_latched0 <= PADTYPE0;
+            PADTYPE_latched1 <= PADTYPE1;
+            PADTYPE_latched2 <= PADTYPE2;
+            PADTYPE_latched3 <= PADTYPE3;
+         end if;
+      end if;
+   end process;
+   
+   PADTYPE_latched        <= PADTYPE_latched0 when (command_padindex = "00") else 
+                             PADTYPE_latched1 when (command_padindex = "01") else 
+                             PADTYPE_latched2 when (command_padindex = "10") else 
+                             PADTYPE_latched3;
+                             
+   snac                   <= '1' when (PADTYPE_latched = "100") else '0';
+   
+   command_startSNAC      <= command_start and (snac or PIFCOMPARE);
+   command_padindexSNAC   <= command_padindex;
+   command_sendCntSNAC    <= command_sendCnt;
+   command_receiveCntSNAC <= command_receiveCnt;
+   
+   toPad_enaSNAC          <= toPad_ena and (snac or PIFCOMPARE);
+   toPad_dataSNAC         <= toPad_data;
+           
+   command_startUSB       <= command_start and (not snac or PIFCOMPARE);
+   command_padindexUSB    <= command_padindex;
+   command_sendCntUSB     <= command_sendCnt;
+   command_receiveCntUSB  <= command_receiveCnt;
+   
+   toPad_enaUSB           <= toPad_ena and (not snac or PIFCOMPARE);
+   toPad_dataUSB          <= toPad_data;        
+   
+   toPad_ready            <= (toPad_readySNAC and toPad_readyUSB) when (PIFCOMPARE = '1') else toPad_readySNAC when (snac = '1') else toPad_readyUSB;
+   
+   toPIF_timeout          <= toPIF_timeoutSNAC when (snac = '1') else toPIF_timeoutUSB;
+   toPIF_ena              <= toPIF_enaSNAC     when (snac = '1') else toPIF_enaUSB;
+   toPIF_data             <= toPIF_dataSNAC    when (snac = '1') else toPIF_dataUSB;
+   
    iPIF : entity work.PIF
    port map
    (
@@ -949,18 +1025,13 @@ begin
       
       second_ena           => second_ena,
 
+      PIFCOMPARE           => PIFCOMPARE,
       ISPAL                => ISPAL,
       CICTYPE              => CICTYPE,
       EEPROMTYPE           => EEPROMTYPE,
-      PADCOUNT             => PADCOUNT,
-      PADTYPE0             => PADTYPE0,
-      PADTYPE1             => PADTYPE1,
-      PADTYPE2             => PADTYPE2,
-      PADTYPE3             => PADTYPE3,
-      PADDPADSWAP          => PADDPADSWAP,
-      CPAKFORMAT           => CPAKFORMAT,
       
       error                => error_pif,
+      isIdle               => pif_idle,
       
       command_start        => command_start,     
       command_padindex     => command_padindex,  
@@ -972,6 +1043,13 @@ begin
       toPIF_timeout        => toPIF_timeout,         
       toPIF_ena            => toPIF_ena,         
       toPIF_data           => toPIF_data,  
+      
+      toPIF_timeout1       => toPIF_timeoutUSB,         
+      toPIF_ena1           => toPIF_enaUSB,         
+      toPIF_data1          => toPIF_dataUSB,       
+      toPIF_timeout2       => toPIF_timeoutSNAC,         
+      toPIF_ena2           => toPIF_enaSNAC,         
+      toPIF_data2          => toPIF_dataSNAC,  
       
       pifrom_wraddress     => pifrom_wraddress,
       pifrom_wrdata        => pifrom_wrdata,   
@@ -995,24 +1073,11 @@ begin
       bus_dataRead         => bus_PIF_dataRead, 
       bus_done             => bus_PIF_done,
       
-      rumble               => rumble,
-      
       eeprom_addr          => eeprom_addr,  
       eeprom_wren          => eeprom_wren,  
       eeprom_in            => eeprom_in,    
       eeprom_out           => eeprom_out,   
       eeprom_change        => eeprom_change,
-      
-      cpak_change          => cpak_change,
-      
-      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
-      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
-      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
-      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
-      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
-      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
-      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
-      sdram_dataRead       => sdramMux_dataRead,
 
       SS_reset             => SS_reset,
       loading_savestate    => loading_savestate,
@@ -1029,27 +1094,27 @@ begin
       clk1x                => clk1x,                
       reset                => reset_intern_1x, 
       
-      PADCOUNT             => PADCOUNT,
-      PADTYPE0             => PADTYPE0,
-      PADTYPE1             => PADTYPE1,
-      PADTYPE2             => PADTYPE2,
-      PADTYPE3             => PADTYPE3,
+      second_ena           => second_ena,
+      
+      PADTYPE              => PADTYPE_latched,
       PADDPADSWAP          => PADDPADSWAP,
       CPAKFORMAT           => CPAKFORMAT,
       PADSLOW              => PADSLOW,
       
-      command_start        => command_start,     
-      command_padindex     => command_padindex,  
-      command_sendCnt      => command_sendCnt,   
-      command_receiveCnt   => command_receiveCnt,
+      command_start        => command_startUSB,     
+      command_padindex     => command_padindexUSB,  
+      command_sendCnt      => command_sendCntUSB,   
+      command_receiveCnt   => command_receiveCntUSB,
                        
-      toPad_ena            => toPad_ena,         
-      toPad_data           => toPad_data,        
-      toPad_ready          => toPad_ready,        
+      toPad_ena            => toPad_enaUSB,         
+      toPad_data           => toPad_dataUSB,        
+      toPad_ready          => toPad_readyUSB,        
                                 
-      toPIF_timeout        => toPIF_timeout,         
-      toPIF_ena            => toPIF_ena,         
-      toPIF_data           => toPIF_data,        
+      toPIF_timeout        => toPIF_timeoutUSB,         
+      toPIF_ena            => toPIF_enaUSB,         
+      toPIF_data           => toPIF_dataUSB, 
+      
+      rumble               => rumble,        
 
       pad_A                => pad_A,         
       pad_B                => pad_B,         
@@ -1072,7 +1137,19 @@ begin
       pad_2_analog_h       => pad_2_analog_h,
       pad_2_analog_v       => pad_2_analog_v,
       pad_3_analog_h       => pad_3_analog_h,
-      pad_3_analog_v       => pad_3_analog_v
+      pad_3_analog_v       => pad_3_analog_v,
+            
+      cpak_change          => cpak_change,
+      tpak_change          => tpak_change,
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead
    );
 
    rdram_writeMask(DDR3MUX_VI) <= (others => '-');
@@ -1425,7 +1502,7 @@ begin
       request_busy        => savestate_busy    
    );
    
-   any_change <= change_flash or change_sram or eeprom_change or cpak_change;
+   any_change <= change_flash or change_sram or eeprom_change or cpak_change or tpak_change;
    
    isavemem : entity work.savemem
    port map
@@ -1435,6 +1512,7 @@ begin
       
       SAVETYPE             => SAVETYPE,
       CONTROLLERPAK        => CONTROLLERPAK,
+      TRANSFERPAK          => TRANSFERPAK,
       
       save                 => save,          
       load                 => load,          

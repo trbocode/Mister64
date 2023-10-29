@@ -20,12 +20,13 @@ entity RDP_CombineAlpha is
       settings_primcolor      : in  tsettings_primcolor;
       settings_envcolor       : in  tsettings_envcolor;
      
-      pipeInColor             : in  tcolor4_s16;
+      pipeInColor             : in  tcolor4_u9;
       tex_alpha               : in  unsigned(7 downto 0);
       tex2_alpha              : in  unsigned(7 downto 0);
       lod_frac                : in  unsigned(7 downto 0);
       cvgCount                : in  unsigned(3 downto 0);
       cvgFB                   : in  unsigned(2 downto 0);
+      ditherAlpha             : in  unsigned(2 downto 0);
 
       cvg_overflow            : out std_logic;
       combine_alpha           : out unsigned(7 downto 0) := (others => '0');
@@ -72,7 +73,7 @@ begin
          when 1 => alpha_sub1 <= "00" & signed(tex_alpha);
          when 2 => alpha_sub1 <= "00" & signed(tex2_alpha);
          when 3 => alpha_sub1 <= "00" & signed(settings_primcolor.prim_A);
-         when 4 => alpha_sub1 <= '0' & pipeInColor(3)(8 downto 0);
+         when 4 => alpha_sub1 <= '0' & signed(pipeInColor(3));
          when 5 => alpha_sub1 <= "00" & signed(settings_envcolor.env_A);
          when 6 => alpha_sub1 <= 10x"100";
          when 7 => alpha_sub1 <= (others => '0');
@@ -85,7 +86,7 @@ begin
          when 1 => alpha_sub2 <= "00" & signed(tex_alpha);
          when 2 => alpha_sub2 <= "00" & signed(tex2_alpha);
          when 3 => alpha_sub2 <= "00" & signed(settings_primcolor.prim_A);
-         when 4 => alpha_sub2 <= '0' & pipeInColor(3)(8 downto 0);
+         when 4 => alpha_sub2 <= '0' & signed(pipeInColor(3));
          when 5 => alpha_sub2 <= "00" & signed(settings_envcolor.env_A);
          when 6 => alpha_sub2 <= 10x"100";
          when 7 => alpha_sub2 <= (others => '0');
@@ -98,7 +99,7 @@ begin
          when 1 => alpha_mul <= "00" & signed(tex_alpha);
          when 2 => alpha_mul <= "00" & signed(tex2_alpha);
          when 3 => alpha_mul <= "00" & signed(settings_primcolor.prim_A);
-         when 4 => alpha_mul <= '0' & pipeInColor(3)(8 downto 0);
+         when 4 => alpha_mul <= '0' & signed(pipeInColor(3));
          when 5 => alpha_mul <= "00" & signed(settings_envcolor.env_A);
          when 6 => alpha_mul <= "00" & signed(settings_primcolor.prim_levelFrac);
          --when 7 => alpha_sub2 <= (others => '0');
@@ -111,7 +112,7 @@ begin
          when 1 => alpha_add <= "00" & signed(tex_alpha);
          when 2 => alpha_add <= "00" & signed(tex2_alpha);
          when 3 => alpha_add <= "00" & signed(settings_primcolor.prim_A);
-         when 4 => alpha_add <= '0' & pipeInColor(3)(8 downto 0);
+         when 4 => alpha_add <= '0' & signed(pipeInColor(3));
          when 5 => alpha_add <= "00" & signed(settings_envcolor.env_A);
          when 6 => alpha_add <= 10x"100";
          when 7 => alpha_add <= (others => '0');
@@ -151,7 +152,7 @@ begin
             
          if (settings_otherModes.alphaCvgSelect = '0') then
             if (settings_otherModes.key = '0') then
-               calc_alpha := combiner_result; -- todo : add dither
+               calc_alpha := combiner_result + to_integer(ditherAlpha);
             else
                error_combineAlpha <= '1'; -- todo: key alpha mode
             end if;

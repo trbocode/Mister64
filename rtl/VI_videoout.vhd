@@ -214,7 +214,7 @@ begin
    videoout_settings.H_VIDEO_START     <= VI_H_VIDEO_START;
    
    newLine    <= videoout_reports.newLine;
-   VI_CURRENT <= videoout_reports.VI_CURRENT & '0'; -- todo: need to find when interlace sets bit 0, can't be instant, otherwise Kroms CPU tests would hang in infinite loop  
+   VI_CURRENT <= videoout_reports.VI_CURRENT & videoout_reports.interlacedDisplayField; -- todo: need to find when interlace sets bit 0, can't be instant, otherwise Kroms CPU tests would hang in infinite loop  
    
    iVI_linefetch : entity work.VI_linefetch
    port map

@@ -77,7 +77,7 @@ entity RDP_raster is
       pipeIn_cvgValue         : out unsigned(7 downto 0) := (others => '0');
       pipeIn_offX             : out unsigned(1 downto 0) := (others => '0');
       pipeIn_offY             : out unsigned(1 downto 0) := (others => '0');
-      pipeInColor             : out tcolor4_s16 := (others => (others => '0'));
+      pipeInColorFull         : out tcolor4_s32 := (others => (others => '0'));
       pipeIn_S                : out signed(15 downto 0) := (others => '0');
       pipeIn_T                : out signed(15 downto 0) := (others => '0');
       pipeInWCarry            : out std_logic := '0';
@@ -91,7 +91,6 @@ entity RDP_raster is
       
       -- synthesis translate_off
       pipeIn_cvg16            : out unsigned(15 downto 0) := (others => '0');
-      pipeInColorFull         : out tcolor4_s32;
       pipeInSTWZ              : out tcolor4_s32;
       -- synthesis translate_on
 
@@ -264,6 +263,7 @@ architecture arch of RDP_raster is
    signal line_endX        : unsigned(11 downto 0) := (others => '0');
    signal calcIndex        : unsigned(11 downto 0);
    signal line_indexX      : unsigned(11 downto 0) := (others => '0');
+   signal line_indexXZ     : unsigned(11 downto 0) := (others => '0');
    signal line_indexX9     : unsigned(11 downto 0) := (others => '0');
    signal line_offsetPx    : unsigned(2 downto 0) := (others => '0');
    signal line_offsetPxZ   : unsigned(1 downto 0) := (others => '0');
@@ -341,6 +341,7 @@ architecture arch of RDP_raster is
    -- comb calculation
    signal calcPixelAddr    : unsigned(25 downto 0);
    signal calcPixelAddrZ   : unsigned(25 downto 0);
+   signal calcPixelStart   : unsigned(25 downto 0);
    signal calcPixelStartZ  : unsigned(25 downto 0);
    
    signal calcCopySizeFlip : unsigned(11 downto 0);
@@ -771,6 +772,11 @@ begin
                     resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 4, 26);
    
    calcPixelAddrZ  <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + line_posX) * 2, 26);
+   
+   calcPixelStart  <= resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 1, 26) when (settings_colorImage.FB_size = SIZE_8BIT) else
+                      resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26) when (settings_colorImage.FB_size = SIZE_16BIT) else
+                      resize(settings_colorImage.FB_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 4, 26);
+                      
    calcPixelStartZ <= resize(settings_Z_base + ((line_posY * (settings_colorImage.FB_width_m1 + 1)) + lineInfo.xStart) * 2, 26);
   
    calcIndex      <= lineInfo.xEnd - lineInfo.xStart;
@@ -892,25 +898,35 @@ begin
                   line_posY   <= lineInfo.Y;
                   
                   if (settings_poly.lft = '1' or settings_otherModes.cycleType = "11") then
-                     line_posX    <= lineInfo.xStart;
-                     line_endX    <= lineInfo.xEnd;
-                     line_indexX  <= (others => '0');
+                     line_posX      <= lineInfo.xStart;
+                     line_endX      <= lineInfo.xEnd;
+                     line_offsetPx  <= (others => '0');
+                     line_offsetPxZ <= (others => '0');
+                     line_indexX    <= (others => '0');
+                     case (settings_colorImage.FB_size) is
+                        when SIZE_8BIT  => line_indexX(2 downto 0) <= calcPixelStart(2 downto 0);              
+                        when SIZE_16BIT => line_indexX(1 downto 0) <= calcPixelStart(2 downto 1);              
+                        when SIZE_32BIT => line_indexX(0)          <= calcPixelStart(2);              
+                        when others => null;
+                     end case;
+                     line_indexXZ <= (others => '0');
+                     line_indexXZ(1 downto 0) <= calcPixelStartZ(2 downto 1);
                      line_indexX9 <= (others => '0');
                      line_indexX9(3 downto 0) <= calcPixelStartZ(4 downto 1);
                   else
                      line_posX    <= lineInfo.xEnd;
                      line_endX    <= lineInfo.xStart;
                      line_indexX  <= calcIndex;
+                     line_indexXZ <= calcIndex;
                      line_indexX9 <= calcIndex + to_integer(calcPixelStartZ(4 downto 1));
+                     case (settings_colorImage.FB_size) is
+                        when SIZE_8BIT  => line_offsetPx <= lineInfo.xStart(2 downto 0);
+                        when SIZE_16BIT => line_offsetPx <= "0" & lineInfo.xStart(1 downto 0);
+                        when SIZE_32BIT => line_offsetPx <= "00" & lineInfo.xStart(0);
+                        when others => null;
+                     end case;
+                     line_offsetPxZ <= lineInfo.xStart(1 downto 0);
                   end if;
-                  
-                  case (settings_colorImage.FB_size) is
-                     when SIZE_8BIT  => line_offsetPx <= lineInfo.xStart(2 downto 0);
-                     when SIZE_16BIT => line_offsetPx <= "0" & lineInfo.xStart(1 downto 0);
-                     when SIZE_32BIT => line_offsetPx <= "00" & lineInfo.xStart(0);
-                     when others => null;
-                  end case;
-                  line_offsetPxZ <= lineInfo.xStart(1 downto 0);
                   
                   if (settings_poly.lft = '1') then
                      xDiff       <= signed(lineInfo.xStart) - lineInfo.unscrx(11 downto 0);
@@ -962,10 +978,12 @@ begin
                   if (settings_poly.lft = '1') then
                      line_posX    <= line_posX + line_stepsize;
                      line_indexX  <= line_indexX + line_stepsize;
+                     line_indexXZ <= line_indexXZ + line_stepsize;
                      line_indexX9 <= line_indexX9 + line_stepsize;
                   else
                      line_posX    <= line_posX - line_stepsize;
                      line_indexX  <= line_indexX - line_stepsize;
+                     line_indexXZ <= line_indexXZ - line_stepsize;
                      line_indexX9 <= line_indexX9 - line_stepsize;
                   end if;
 
@@ -974,7 +992,7 @@ begin
                   pipeIn_Addr       <= calcPixelAddr;
                   pipeIn_AddrZ      <= calcPixelAddrZ;
                   pipeIn_xIndexPx   <= line_indexX + line_offsetPx;
-                  pipeIn_xIndexPxZ  <= line_indexX + line_offsetPxZ;
+                  pipeIn_xIndexPxZ  <= line_indexXZ + line_offsetPxZ;
                   pipeIn_xIndex9    <= line_indexX9;
                   pipeIn_X          <= line_posX;
                   pipeIn_Y          <= line_posY;
@@ -982,10 +1000,10 @@ begin
                   pipeIn_offX       <= offx;
                   pipeIn_offY       <= offy;
                      
-                  pipeInColor(0)    <= pixel_Color_R(31 downto 16);
-                  pipeInColor(1)    <= pixel_Color_G(31 downto 16);
-                  pipeInColor(2)    <= pixel_Color_B(31 downto 16);
-                  pipeInColor(3)    <= pixel_Color_A(31 downto 16);
+                  pipeInColorFull(0) <= pixel_Color_R;
+                  pipeInColorFull(1) <= pixel_Color_G;
+                  pipeInColorFull(2) <= pixel_Color_B;
+                  pipeInColorFull(3) <= pixel_Color_A;
                      
                   pipeIn_S          <= pixel_Texture_S(31 downto 16);
                   pipeIn_T          <= pixel_Texture_T(31 downto 16);
@@ -1025,12 +1043,7 @@ begin
                   end if;
 
                   -- synthesis translate_off
-                  pipeIn_cvg16      <= cvg(0) & cvg(1) & cvg(2) & cvg(3);
-                  
-                  pipeInColorFull(0) <= pixel_Color_R;
-                  pipeInColorFull(1) <= pixel_Color_G;
-                  pipeInColorFull(2) <= pixel_Color_B;
-                  pipeInColorFull(3) <= pixel_Color_A;                  
+                  pipeIn_cvg16      <= cvg(0) & cvg(1) & cvg(2) & cvg(3);     
                   
                   pipeInSTWZ(0)      <= pixel_Texture_S;
                   pipeInSTWZ(1)      <= pixel_Texture_T;
@@ -1330,9 +1343,9 @@ begin
                      -- todo: implement
                   elsif (settings_tile.Tile_format = FORMAT_RGBA and settings_textureImage.tex_size = SIZE_32BIT) then
                      if (load_bit3flipped = '1') then
-                        export_loadValue.addr   <= 21x"0" & load_Ram2Addr;
+                        export_loadValue.addr   <= 22x"0" & load_Ram2Addr(9 downto 0);
                      else
-                        export_loadValue.addr   <= 21x"0" & load_Ram0Addr;
+                        export_loadValue.addr   <= 22x"0" & load_Ram0Addr(9 downto 0);
                      end if;
                      export_loadValue.data   <= 48x"0" & unsigned(load_Ram0Data);
                      export_loadValue.debug1 <= 16x"0" & unsigned(load_Ram2Data);

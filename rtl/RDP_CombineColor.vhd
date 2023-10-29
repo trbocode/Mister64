@@ -20,13 +20,14 @@ entity RDP_CombineColor is
       settings_primcolor      : in  tsettings_primcolor;
       settings_envcolor       : in  tsettings_envcolor;
      
-      pipeInColor             : in  tcolor4_s16;
+      pipeInColor             : in  tcolor4_u9;
       texture_color           : in  tcolor3_u8;
       tex_alpha               : in  unsigned(7 downto 0);      
       texture2_color          : in  tcolor3_u8;
       tex2_alpha              : in  unsigned(7 downto 0);
       lod_frac                : in  unsigned(7 downto 0);
       combine_alpha           : in  unsigned(7 downto 0);
+      random2                 : in  unsigned(1 downto 0);
 
       combine_color           : out tcolor3_u8
    );
@@ -84,10 +85,10 @@ begin
             when 1 => color_sub1(i) <= x"00" & signed(texture_color(i));
             when 2 => color_sub1(i) <= x"00" & signed(texture2_color(i));
             when 3 => color_sub1(i) <= x"00" & signed(primcolor(i));
-            when 4 => color_sub1(i) <= pipeInColor(i);
+            when 4 => color_sub1(i) <= 7x"00" & signed(pipeInColor(i));
             when 5 => color_sub1(i) <= x"00" & signed(envcolor(i));
             when 6 => color_sub1(i) <= 16x"100";
-            when 7 => errorCombine <= '1'; --noise
+            when 7 => color_sub1(i) <= x"00" & signed(random2) & "100000";
             when others => null;
          end case;
          
@@ -97,7 +98,7 @@ begin
             when 1 => color_sub2(i) <= x"00" & signed(texture_color(i));
             when 2 => color_sub2(i) <= x"00" & signed(texture2_color(i));
             when 3 => color_sub2(i) <= x"00" & signed(primcolor(i));
-            when 4 => color_sub2(i) <= pipeInColor(i);
+            when 4 => color_sub2(i) <= 7x"00" & signed(pipeInColor(i));
             when 5 => color_sub2(i) <= x"00" & signed(envcolor(i));
             when 6 => errorCombine <= '1'; -- key center
             when 7 => errorCombine <= '1'; -- k4
@@ -110,14 +111,14 @@ begin
             when  1 => color_mul(i) <= x"00" & signed(texture_color(i));
             when  2 => color_mul(i) <= x"00" & signed(texture2_color(i));
             when  3 => color_mul(i) <= x"00" & signed(primcolor(i));
-            when  4 => color_mul(i) <= pipeInColor(i);
+            when  4 => color_mul(i) <= 7x"00" & signed(pipeInColor(i));
             when  5 => color_mul(i) <= x"00" & signed(envcolor(i));
             when  6 => errorCombine <= '1'; -- key scale
             when  7 => color_mul(i) <= x"00" & signed(combine_alpha);
             when  8 => color_mul(i) <= x"00" & signed(tex_alpha);
             when  9 => color_mul(i) <= x"00" & signed(tex2_alpha);
             when 10 => color_mul(i) <= x"00" & signed(settings_primcolor.prim_A);
-            when 11 => color_mul(i) <= pipeInColor(3);
+            when 11 => color_mul(i) <= 7x"00" & signed(pipeInColor(3));
             when 12 => color_mul(i) <= x"00" & signed(settings_envcolor.env_A);
             when 13 => color_mul(i) <= x"00" & signed(lod_frac);
             when 14 => color_mul(i) <= x"00" & signed(settings_primcolor.prim_levelFrac);
@@ -131,7 +132,7 @@ begin
             when 1 => color_add(i) <= x"00" & signed(texture_color(i));
             when 2 => color_add(i) <= x"00" & signed(texture2_color(i));
             when 3 => color_add(i) <= x"00" & signed(primcolor(i));
-            when 4 => color_add(i) <= pipeInColor(i);
+            when 4 => color_add(i) <= 7x"00" & signed(pipeInColor(i));
             when 5 => color_add(i) <= x"00" & signed(envcolor(i));
             when 6 => color_add(i) <= 16x"100";
             when others => null;

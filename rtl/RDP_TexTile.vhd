@@ -41,10 +41,10 @@ architecture arch of RDP_TexTile is
    signal relative         : signed(15 downto 0);
    
    signal clampMax         : unsigned(9 downto 0);
-   signal clamp_index      : unsigned(9 downto 0);
-   signal clamp_index1     : unsigned(9 downto 0);
-   signal clamp_index2     : unsigned(9 downto 0);
-   signal clamp_index3     : unsigned(9 downto 0);
+   signal clamp_index      : unsigned(10 downto 0);
+   signal clamp_index1     : unsigned(10 downto 0);
+   signal clamp_index2     : unsigned(10 downto 0);
+   signal clamp_index3     : unsigned(10 downto 0);
    signal frac             : unsigned(4 downto 0);
          
    signal maskShift        : integer range 0 to 10;
@@ -106,12 +106,12 @@ begin
    process (all)
    begin
    
-      clamp_index <= unsigned(relative(14 downto 5));
+      clamp_index <= unsigned(relative(15 downto 5));
       frac        <= unsigned(relative(4 downto 0));
    
       if (tile_clamp = '1' or tile_mask = 0) then
          if (to_integer(shifted(15 downto 3)) >= to_integer(tile_max)) then
-            clamp_index <= clampMax;
+            clamp_index <= clampMax(clampMax'left) & clampMax;
             frac        <= (others => '0');
          elsif (shifted < 0) then
             clamp_index <= (others => '0');
@@ -130,29 +130,29 @@ begin
    maskShifted <= shift_right(to_unsigned(16#FFFF#, 16), 16 - maskShift);
    mask        <= maskShifted(9 downto 0);
    
-   wrap_index    <= clamp_index(clamp_index'left)  & clamp_index;
-   wrap_index1   <= clamp_index1(clamp_index'left) & clamp_index1;
-   wrap_index2   <= clamp_index2(clamp_index'left) & clamp_index2;
-   wrap_index3   <= clamp_index3(clamp_index'left) & clamp_index3;
+   wrap_index    <= clamp_index;
+   wrap_index1   <= clamp_index1;
+   wrap_index2   <= clamp_index2;
+   wrap_index3   <= clamp_index3;
    
    wrap          <= wrap_index(maskShift);
    wrap1         <= wrap_index1(maskShift);
    wrap2         <= wrap_index2(maskShift);
    wrap3         <= wrap_index3(maskShift);
    
-   wrapped_index  <= not clamp_index  when (wrap  = '1') else clamp_index;
-   wrapped_index1 <= not clamp_index1 when (wrap1 = '1') else clamp_index1;
-   wrapped_index2 <= not clamp_index2 when (wrap2 = '1') else clamp_index2;
-   wrapped_index3 <= not clamp_index3 when (wrap3 = '1') else clamp_index3;
+   wrapped_index  <= not clamp_index(9 downto 0)  when (wrap  = '1') else clamp_index(9 downto 0);
+   wrapped_index1 <= not clamp_index1(9 downto 0) when (wrap1 = '1') else clamp_index1(9 downto 0);
+   wrapped_index2 <= not clamp_index2(9 downto 0) when (wrap2 = '1') else clamp_index2(9 downto 0);
+   wrapped_index3 <= not clamp_index3(9 downto 0) when (wrap3 = '1') else clamp_index3(9 downto 0);
 
    process (all)
    begin
             
-      index_calc   <= clamp_index;
-      index_calc_1 <= clamp_index1;
-      index_calc_2 <= clamp_index2;
-      index_calc_3 <= clamp_index3;
-      index_calc_N <= clamp_index + 1;
+      index_calc   <= clamp_index(9 downto 0);
+      index_calc_1 <= clamp_index1(9 downto 0);
+      index_calc_2 <= clamp_index2(9 downto 0);
+      index_calc_3 <= clamp_index3(9 downto 0);
+      index_calc_N <= clamp_index(9 downto 0) + 1;
       
       if (tile_mask > 0) then
          if (tile_mirror = '1') then
@@ -168,12 +168,12 @@ begin
             if (wrap = '1' and ((((wrapped_index and mask) - 1) and mask) = mask)) then index_calc_N <= wrapped_index and mask; end if;
             if (wrap = '0' and ((wrapped_index and mask)       = mask))            then index_calc_N <= wrapped_index and mask; end if;           
          else
-            index_calc  <= clamp_index  and mask;
-            index_calc_1 <= clamp_index1 and mask;
-            index_calc_2 <= clamp_index2 and mask;
-            index_calc_3 <= clamp_index3 and mask;
+            index_calc   <= clamp_index(9 downto 0)  and mask;
+            index_calc_1 <= clamp_index1(9 downto 0) and mask;
+            index_calc_2 <= clamp_index2(9 downto 0) and mask;
+            index_calc_3 <= clamp_index3(9 downto 0) and mask;
             
-            index_calc_N <= (clamp_index + 1) and mask;
+            index_calc_N <= (clamp_index(9 downto 0) + 1) and mask;
             if (clamp_index = mask) then
                index_calc_N  <= (others => '0');
             end if;

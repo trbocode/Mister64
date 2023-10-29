@@ -287,6 +287,7 @@ package pRDP is
    type tcolor3_s32 is array(0 to 2) of signed(31 downto 0);
    
    type tcolor4_u8  is array(0 to 3) of unsigned(7 downto 0);
+   type tcolor4_u9  is array(0 to 3) of unsigned(8 downto 0);
    type tcolor4_u12 is array(0 to 3) of unsigned(11 downto 0);
    type tcolor4_u32 is array(0 to 3) of unsigned(31 downto 0);
    type tcolor4_s16 is array(0 to 3) of signed(15 downto 0);
@@ -349,6 +350,7 @@ package body pRDP is
          when 19 => write(line_out, string'("LOD: I ")); 
          when 23 => write(line_out, string'("Comb: I ")); 
          when 24 => write(line_out, string'("FBMem: I ")); 
+         when 25 => write(line_out, string'("RGBA: I ")); 
          when others => null;
       end case;
       

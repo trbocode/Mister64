@@ -18,6 +18,10 @@ architecture arch of etb is
    signal clk1x               : std_logic := '1';
    signal reset               : std_logic := '1';
    
+   signal CPAKFORMAT          : std_logic := '0';
+   
+   signal PADTYPE             : std_logic_vector(2 downto 0);
+   
    signal command_start       : std_logic;
    signal command_padindex    : unsigned(1 downto 0);
    signal command_sendCnt     : unsigned(5 downto 0);
@@ -27,9 +31,15 @@ architecture arch of etb is
    signal toPad_data          : std_logic_vector(7 downto 0);          
    signal toPad_ready         : std_logic;  
    
-   signal toPIF_timeout       : std_logic;   
-   signal toPIF_ena           : std_logic;   
-   signal toPIF_data          : std_logic_vector(7 downto 0);
+   signal toPad_ready1        : std_logic;  
+   signal toPIF_timeout1      : std_logic;   
+   signal toPIF_ena1          : std_logic;   
+   signal toPIF_data1         : std_logic_vector(7 downto 0);
+   
+   signal toPad_ready2        : std_logic;  
+   signal toPIF_timeout2      : std_logic;   
+   signal toPIF_ena2          : std_logic;   
+   signal toPIF_data2         : std_logic_vector(7 downto 0);
          
    signal SIPIF_ramreq        : std_logic := '0';
    signal SIPIF_addr          : unsigned(5 downto 0) := (others => '0');
@@ -78,16 +88,10 @@ begin
       
       second_ena           => '1',
       
+      PIFCOMPARE           => '0',
       ISPAL                => '0',
-      EEPROMTYPE           => "01",
+      EEPROMTYPE           => "00",
       CICTYPE              => "0000",
-      PADCOUNT             => PADCOUNT,
-      PADTYPE0             => "01",
-      PADTYPE1             => "00",
-      PADTYPE2             => "00",
-      PADTYPE3             => "00",
-      PADDPADSWAP          => '0',
-      CPAKFORMAT           => '0',
                            
       command_start        => command_start,     
       command_padindex     => command_padindex,  
@@ -95,10 +99,19 @@ begin
       command_receiveCnt   => command_receiveCnt,                
       toPad_ena            => toPad_ena,         
       toPad_data           => toPad_data,                              
-      toPad_ready          => toPad_ready,                              
-      toPIF_timeout        => toPIF_timeout,         
-      toPIF_ena            => toPIF_ena,         
-      toPIF_data           => toPIF_data, 
+      toPad_ready          => toPad_ready, 
+      
+      toPIF_timeout        => toPIF_timeout1,         
+      toPIF_ena            => toPIF_ena1,         
+      toPIF_data           => toPIF_data1, 
+      
+      toPIF_timeout1       => toPIF_timeout1,         
+      toPIF_ena1           => toPIF_ena1,         
+      toPIF_data1          => toPIF_data1, 
+      
+      toPIF_timeout2       => toPIF_timeout2,         
+      toPIF_ena2           => toPIF_ena2,         
+      toPIF_data2          => toPIF_data2, 
                            
       pifrom_wraddress     => 10x"0",
       pifrom_wrdata        => 32x"0",
@@ -126,15 +139,6 @@ begin
       eeprom_wren          => '0',
       eeprom_in            => 32x"0",
       
-      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
-      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
-      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
-      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
-      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
-      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
-      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
-      sdram_dataRead       => sdramMux_dataRead,
-      
       SS_reset             => '0',
       loading_savestate    => '0',
       SS_DataWrite         => 64x"0",
@@ -145,19 +149,21 @@ begin
       SS_idle              => open
    );
    
-   iGamepad : entity N64.Gamepad
+   toPad_ready <= toPad_ready1;-- and toPad_ready2;
+   
+   PADTYPE <= "010" when (command_padindex = "00") else "001";
+   
+   iGamepadslow : entity N64.Gamepad
    port map
    (
       clk1x                => clk1x,
       reset                => reset,
-     
-      PADCOUNT             => PADCOUNT,
-      PADTYPE0             => "01",
-      PADTYPE1             => "00",
-      PADTYPE2             => "00",
-      PADTYPE3             => "00",
+      
+      second_ena           => '0',
+
+      PADTYPE              => PADTYPE,
       PADDPADSWAP          => '0',
-      CPAKFORMAT           => '0',
+      CPAKFORMAT           => CPAKFORMAT,
       PADSLOW              => '1',
       
       command_start        => command_start,     
@@ -167,11 +173,11 @@ begin
                        
       toPad_ena            => toPad_ena,         
       toPad_data           => toPad_data,        
-      toPad_ready          => toPad_ready,        
+      toPad_ready          => toPad_ready1,        
                                 
-      toPIF_timeout        => toPIF_timeout,         
-      toPIF_ena            => toPIF_ena,         
-      toPIF_data           => toPIF_data,        
+      toPIF_timeout        => toPIF_timeout1,         
+      toPIF_ena            => toPIF_ena1,         
+      toPIF_data           => toPIF_data1,        
 
       pad_A                => "0000",
       pad_B                => "0000",
@@ -194,13 +200,86 @@ begin
       pad_2_analog_h       => x"00",
       pad_2_analog_v       => x"00",
       pad_3_analog_h       => x"00",
-      pad_3_analog_v       => x"00"
+      pad_3_analog_v       => x"00",
+      
+      sdram_request        => sdramMux_request(SDRAMMUX_PIF),   
+      sdram_rnw            => sdramMux_rnw(SDRAMMUX_PIF),       
+      sdram_address        => sdramMux_address(SDRAMMUX_PIF),   
+      sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_PIF),
+      sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_PIF), 
+      sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_PIF), 
+      sdram_done           => sdramMux_done(SDRAMMUX_PIF),      
+      sdram_dataRead       => sdramMux_dataRead
    );
    
+   --iGamepadfast : entity N64.Gamepad
+   --port map
+   --(
+   --   clk1x                => clk1x,
+   --   reset                => reset,
+   --   
+   --   second_ena           => '0',
+   --  
+   --   PADTYPE              => PADTYPE,
+   --   PADDPADSWAP          => '0',
+   --   CPAKFORMAT           => CPAKFORMAT,
+   --   PADSLOW              => '0',
+   --   
+   --   command_start        => command_start,     
+   --   command_padindex     => command_padindex,  
+   --   command_sendCnt      => command_sendCnt,   
+   --   command_receiveCnt   => command_receiveCnt,
+   --                    
+   --   toPad_ena            => toPad_ena,         
+   --   toPad_data           => toPad_data,        
+   --   toPad_ready          => toPad_ready2,        
+   --                             
+   --   toPIF_timeout        => toPIF_timeout2,         
+   --   toPIF_ena            => toPIF_ena2,         
+   --   toPIF_data           => toPIF_data2,        
+   --
+   --   pad_A                => "0000",
+   --   pad_B                => "0000",
+   --   pad_Z                => "0000",
+   --   pad_START            => "0000",
+   --   pad_DPAD_UP          => "0000",
+   --   pad_DPAD_DOWN        => "0000",
+   --   pad_DPAD_LEFT        => "0000",
+   --   pad_DPAD_RIGHT       => "0000",
+   --   pad_L                => "0000",
+   --   pad_R                => "0000",
+   --   pad_C_UP             => "0000",
+   --   pad_C_DOWN           => "0000",
+   --   pad_C_LEFT           => "0000",
+   --   pad_C_RIGHT          => "0000",
+   --   pad_0_analog_h       => x"00",
+   --   pad_0_analog_v       => x"00",
+   --   pad_1_analog_h       => x"00",
+   --   pad_1_analog_v       => x"00",
+   --   pad_2_analog_h       => x"00",
+   --   pad_2_analog_v       => x"00",
+   --   pad_3_analog_h       => x"00",
+   --   pad_3_analog_v       => x"00",
+   --   
+   --   sdram_request        => sdramMux_request(SDRAMMUX_SAV),   
+   --   sdram_rnw            => sdramMux_rnw(SDRAMMUX_SAV),       
+   --   sdram_address        => sdramMux_address(SDRAMMUX_SAV),   
+   --   sdram_burstcount     => sdramMux_burstcount(SDRAMMUX_SAV),
+   --   sdram_writeMask      => sdramMux_writeMask(SDRAMMUX_SAV), 
+   --   sdram_dataWrite      => sdramMux_dataWrite(SDRAMMUX_SAV), 
+   --   sdram_done           => sdramMux_done(SDRAMMUX_SAV),      
+   --   sdram_dataRead       => sdramMux_dataRead
+   --);
+   
    iSDRamMux : entity n64.SDRamMux
+   generic map
+   (
+      FASTSIM => '0'
+   )
    port map
    (
       clk1x                => clk1x,
+      ss_reset             => '0',
                            
       error                => open,
                            
@@ -224,7 +303,7 @@ begin
       sdramMux_dataRead    => sdramMux_dataRead,
       
       rdp9fifo_reset       => '0',   
-      rdp9fifo_Din         => 50x"0",     
+      rdp9fifo_Din         => 54x"0",     
       rdp9fifo_Wr          => '0',      
       
       rdp9fifoZ_reset      => '0',   
@@ -232,16 +311,16 @@ begin
       rdp9fifoZ_Wr         => '0'    
    );
    
-   sdramMux_request(0) <= '0';
-   sdramMux_request(2 to 3) <= "00";
+   sdramMux_request(2 to 4) <= "000";
    
    isdram_model : entity work.sdram_model
    generic map
    (
       DOREFRESH         => '0',
-      INITFILE          => "NONE",
-      SCRIPTLOADING     => '1',
-      FILELOADING       => '0'
+      INITFILE          => ".gb",
+      SCRIPTLOADING     => '0',
+      FILELOADING       => '1',
+      FILEOFFSET        => 16#800000#
    )
    port map
    (
@@ -256,6 +335,15 @@ begin
       done              => sdram_done,
       fileSize          => open
    );
+   
+   --process
+   --begin
+   --   wait for 3 ms;
+   --   CPAKFORMAT <= '1';
+   --   wait for 100 ns;
+   --   CPAKFORMAT <= '0';
+   --   wait;
+   --end process;
    
    process
       file infile          : text;
@@ -316,7 +404,7 @@ begin
       
       file_close(infile);
       
-      wait for 10 us;
+      wait for 100 us;
       
       if (cmdCount >= 0) then
          report "DONE" severity failure;

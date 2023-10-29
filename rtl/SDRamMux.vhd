@@ -28,10 +28,11 @@ end package;
 --------------- SDRamMux module    -------------------------------
 -----------------------------------------------------------------
 
--- 0..1  Mbyte = 9th bit of RDRAM
--- 4..5  Mbyte = Saverams 
--- 5..6  Mbyte = Controller Paks
--- 8..72 Mbyte = ROM 
+--  0..1  Mbyte = 9th bit of RDRAM
+--  4..5  Mbyte = Saverams 
+--  5..6  Mbyte = Controller Paks
+--  8..16 Mbyte = GB ROM 
+-- 16..80 Mbyte = N64 ROM 
 
 library IEEE;
 use IEEE.std_logic_1164.all;  
