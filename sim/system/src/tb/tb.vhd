@@ -209,6 +209,7 @@ begin
       EEPROMTYPE            => "01",
       CONTROLLERPAK         => '1',
       CPAKFORMAT            => '0',
+      TRANSFERPAK           => '0',
       
       save                  => '0', 
       load                  => '0', 

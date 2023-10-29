@@ -26,6 +26,7 @@ entity RDP_CombineAlpha is
       lod_frac                : in  unsigned(7 downto 0);
       cvgCount                : in  unsigned(3 downto 0);
       cvgFB                   : in  unsigned(2 downto 0);
+      ditherAlpha             : in  unsigned(2 downto 0);
 
       cvg_overflow            : out std_logic;
       combine_alpha           : out unsigned(7 downto 0) := (others => '0');
@@ -151,7 +152,7 @@ begin
             
          if (settings_otherModes.alphaCvgSelect = '0') then
             if (settings_otherModes.key = '0') then
-               calc_alpha := combiner_result; -- todo : add dither
+               calc_alpha := combiner_result + to_integer(ditherAlpha);
             else
                error_combineAlpha <= '1'; -- todo: key alpha mode
             end if;

@@ -294,7 +294,6 @@ parameter CONF_STR = {
    "P3O[14],Write Z,On,Off;",
    "P3O[15],Read Z,On,Off;",
    "P3O[1],Swap Interlaced,Off,On;",
-   "P3O[90],SNAC,Off,On;",
    "P3O[91],SNAC Compare,Off,On;",
    "-;",
    

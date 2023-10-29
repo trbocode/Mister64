@@ -10,6 +10,7 @@ entity RDP_DitherFetch is
       clk1x                : in  std_logic;
       trigger              : in  std_logic;
       
+      DISABLEDITHER        : in  std_logic;
       settings_otherModes  : in  tsettings_otherModes;
       
       X_in                 : in  unsigned(11 downto 0);
@@ -94,7 +95,10 @@ begin
                when others => null;
             end case;
             
-            ditherAlpha <= (others => '0'); -- todo: hack until implemented
+            if (DISABLEDITHER = '1') then
+               ditherColor <= "000";
+               ditherAlpha <= "000";
+            end if;
          
          end if;
          

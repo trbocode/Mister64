@@ -194,6 +194,8 @@ architecture arch of RDP_pipeline is
    signal texture_S_unclamped : signed(18 downto 0) := (others => '0');
    signal texture_T_unclamped : signed(18 downto 0) := (others => '0');
    
+   signal polyTile2           : unsigned(2 downto 0) := (others => '0');
+   
    -- modules 
    signal corrected_color     : tcolor4_u9;
    
@@ -360,7 +362,7 @@ begin
 
    pipe_busy <= '1' when (stage_valid > 0) else '0';
    
-   pipe_tile <= std_logic_vector(settings_poly.tile + 1) when (step2 = '1') else std_logic_vector(settings_poly.tile);
+   pipe_tile <= std_logic_vector(polyTile2) when (step2 = '1') else std_logic_vector(settings_poly.tile);
    
    TextureReadEna <= pipeIn_trigger or step2;
    
@@ -473,6 +475,11 @@ begin
          
             if (settings_otherModes.cycleType = "01") then
                step2 <= '1';
+            end if;
+            
+            polyTile2 <= settings_poly.tile + 1;
+            if (settings_otherModes.texLod = '1' and settings_otherModes.detailTex = '0' and settings_poly.maxLODlevel = 0) then
+               polyTile2 <= settings_poly.tile;
             end if;
             
             -- ##################################################
@@ -1281,6 +1288,7 @@ begin
       clk1x                => clk1x,     
       trigger              => pipeIn_trigger,  
       
+      DISABLEDITHER        => DISABLEDITHER,
       settings_otherModes  => settings_otherModes,
       
       X_in                 => stage_x(STAGE_TEXREAD),
@@ -1341,6 +1349,7 @@ begin
       lod_frac                => x"FF", -- todo
       cvgCount                => stage_cvgCount(STAGE_PALETTE),
       cvgFB                   => stage_cvgFB(STAGE_PALETTE),
+      ditherAlpha             => ditherAlpha,
                               
       cvg_overflow            => cvg_overflow,
       combine_alpha           => combine_alpha,
@@ -1403,6 +1412,7 @@ begin
       blend_shift_a           => "000",
       blend_shift_b           => "000",
       random8                 => lfsr(7 downto 0),
+      ditherAlpha             => stage_ditherA(STAGE_COMBINER),
       
       blend_alphaIgnore       => blend_alphaIgnore,
       blend_divEna            => blend_divEna,
@@ -1414,8 +1424,6 @@ begin
    iRDP_DitherCalc : entity work.RDP_DitherCalc
    port map
    (
-      DISABLEDITHER        => DISABLEDITHER,
-      settings_otherModes  => settings_otherModes,
       ditherColor          => stage_ditherC(STAGE_OUTPUT),
       color_in             => writePixelColor,
       color_out            => writePixelColorOut
